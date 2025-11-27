@@ -1,0 +1,7 @@
+.idea/
+demo/
+gameplay/
+generated/
+venv/
+.env
+*.mp4
