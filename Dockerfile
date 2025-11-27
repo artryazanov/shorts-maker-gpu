@@ -1,8 +1,16 @@
-FROM python:3.11-slim
+# Use an official PyTorch image with CUDA support
+# PyTorch 2.2.0 is required for Python 3.12 support
+FROM pytorch/pytorch:2.2.0-cuda12.1-cudnn8-runtime
+
+# Set environment variables to avoid interactive prompts during package installation
+ENV DEBIAN_FRONTEND=noninteractive
 
 # Install system dependencies
+# ffmpeg is required for MoviePy and general video processing
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 # Set workdir
