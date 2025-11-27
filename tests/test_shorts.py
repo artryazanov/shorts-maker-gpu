@@ -96,9 +96,9 @@ def test_blur_uses_cupy():
 
     res = blur(image)
 
-    shorts.cupy.asarray.assert_called_with(image)
+    shorts.cp.asarray.assert_called_with(image)
     shorts.cupyx.scipy.ndimage.gaussian_filter.assert_called()
-    shorts.cupy.asnumpy.assert_called()
+    shorts.cp.asnumpy.assert_called()
     assert res is image
 
 
