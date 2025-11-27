@@ -1,5 +1,6 @@
 # Use an official PyTorch image with CUDA support
-FROM pytorch/pytorch:2.1.2-cuda12.1-cudnn8-runtime
+# PyTorch 2.2.0 is required for Python 3.12 support
+FROM pytorch/pytorch:2.2.0-cuda12.1-cudnn8-runtime
 
 # Set environment variables to avoid interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
