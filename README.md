@@ -40,7 +40,7 @@ Python dependencies (see `requirements.txt`):
 Ensure you have the NVIDIA drivers and CUDA toolkit installed.
 
 ```bash
-git clone https://github.com/artryazanov/shorts-maker.git
+git clone https://github.com/artryazanov/shorts-maker-gpu.git
 cd shorts-maker
 python3 -m venv venv
 source venv/bin/activate
