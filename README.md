@@ -23,7 +23,7 @@ Shorts Maker generates vertical video clips from longer gameplay footage. The sc
 
 - **NVIDIA GPU** with CUDA support.
 - **NVIDIA Drivers** (compatible with CUDA 12.1+ recommended).
-- Python 3.11+
+- Python 3.10+
 - FFmpeg (required by `moviepy`).
 - System libraries: `libgl1`, `libglib2.0-0` (often needed for vision libraries).
 
