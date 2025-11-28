@@ -14,13 +14,17 @@ import math
 import random
 import os
 import gc
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Sequence, Tuple, Optional
 
 import numpy as np
 from dotenv import load_dotenv
-from moviepy import CompositeVideoClip, VideoFileClip
+# moviepy is removed from the rendering path.
+# We only import it if strictly necessary for some legacy helper, but we try to avoid it.
+# import moviepy.editor as mp # Removed
+
 import cupy as cp
 import cupyx.scipy.ndimage
 import torch
@@ -83,6 +87,23 @@ class ProcessingConfig:
     def middle_short_length(self) -> float:
         """Return the mid point between min and max short lengths."""
         return (self.min_short_length + self.max_short_length) / 2
+
+
+@dataclass
+class RenderParams:
+    """Parameters required to render the final clip."""
+    source_path: Path
+    start_time: float
+    duration: float
+    output_width: int
+    output_height: int
+    crop_x: int
+    crop_y: int
+    crop_w: int
+    crop_h: int
+    bg_width: int
+    bg_height: int
+    is_vertical_bg: bool  # True if 9:16 background, False if 1:1 background (resizing logic)
 
 
 class _SecondsTime:
@@ -283,26 +304,31 @@ def detect_video_scenes_gpu(video_path: Path, threshold: float = 27.0) -> List[T
     return scenes
 
 
-def blur(image: np.ndarray) -> np.ndarray:
-    """Return a blurred version of ``image`` using GPU acceleration.
+def blur_gpu(image_tensor: torch.Tensor, sigma: float = 8.0) -> torch.Tensor:
+    """Return a blurred version of ``image_tensor`` using CuPy.
 
-    Transfers the image to GPU, applies Gaussian blur via CuPy,
-    and transfers it back.
+    Args:
+        image_tensor: (H, W, 3) torch tensor on GPU.
+        sigma: Blur sigma.
+
+    Returns:
+        Blurred torch tensor (H, W, 3).
     """
-    # Convert numpy to cupy
-    image_gpu = cp.asarray(image)
+    # Use DLPack to zero-copy transfer to Cupy
+    # Note: image_tensor must be contiguous
+    if not image_tensor.is_contiguous():
+        image_tensor = image_tensor.contiguous()
 
-    # Separate channels (H, W, 3) -> (3, H, W) for faster processing or process as is?
-    # Gaussian filter in cupyx supports ndarray.
-    # We want to blur spatial dims (0, 1) and not color (2) if it's separate?
-    # Actually, gaussian_filter on a 3D array with sigma=8 blurs all axes by default.
-    # We usually only want to blur H and W, not across channels (mixing colors).
-    # So we should use sigma=(8, 8, 0).
+    cupy_array = cp.from_dlpack(torch.to_dlpack(image_tensor))
 
-    blurred_gpu = cupyx.scipy.ndimage.gaussian_filter(image_gpu.astype(float), sigma=(8, 8, 0))
+    # Gaussian blur. sigma=(sigma, sigma, 0) means blur H and W, preserve channels.
+    # Convert to float for precision, then back to uint8
+    f_array = cupy_array.astype(float)
+    blurred = cupyx.scipy.ndimage.gaussian_filter(f_array, sigma=(sigma, sigma, 0))
+    blurred = blurred.astype(cupy_array.dtype)
 
-    # Convert back to numpy
-    return cp.asnumpy(blurred_gpu).astype(image.dtype)
+    # Convert back to torch
+    return torch.from_dlpack(cp.to_dlpack(blurred))
 
 
 # --- Audio-based action scoring (GPU) -------------------------------------------
@@ -778,80 +804,6 @@ def best_action_window_start(
     return best_start_time
 
 
-def crop_clip(
-    clip: VideoFileClip,
-    ratio_w: int,
-    ratio_h: int,
-    x_center: float,
-    y_center: float,
-):
-    """Crop ``clip`` to the desired aspect ratio."""
-    width, height = clip.size
-    current_ratio = width / height
-    target_ratio = ratio_w / ratio_h
-
-    if current_ratio > target_ratio:
-        new_width = round(height * ratio_w / ratio_h)
-        return clip.cropped(
-            width=new_width,
-            height=height,
-            x_center=width * x_center,
-            y_center=height * y_center,
-        )
-
-    new_height = round(width / ratio_w * ratio_h)
-    return clip.cropped(
-        width=width,
-        height=new_height,
-        x_center=width * x_center,
-        y_center=height * y_center,
-    )
-
-
-def render_video(
-    clip: VideoFileClip,
-    video_file_name: Path,
-    output_dir: Path,
-    depth: int = 0,
-    max_error_depth: int = 3,
-) -> None:
-    """Render ``clip`` to ``output_dir`` using NVIDIA NVENC hardware encoding."""
-
-    try:
-        # Use NVENC for hardware acceleration
-        clip.write_videofile(
-            str(output_dir / video_file_name.name),
-            codec="h264_nvenc",
-            audio_codec="aac",
-            fps=min(getattr(clip, "fps", 60), 60),
-            # h264_nvenc supports presets like 'p1' to 'p7' (p4 is default/medium)
-            # We can also set bitrate if needed.
-            ffmpeg_params=["-preset", "p4"]
-        )
-    except Exception as e:
-        logging.warning(f"NVENC rendering failed: {e}. Trying fallback to libx264...")
-        try:
-            clip.write_videofile(
-                str(output_dir / video_file_name.name),
-                codec="libx264",
-                audio_codec="aac",
-                fps=min(getattr(clip, "fps", 60), 60),
-            )
-        except Exception:
-            if depth < max_error_depth:
-                logging.exception("Rendering failed, retrying...")
-                render_video(
-                    clip,
-                    video_file_name,
-                    output_dir,
-                    depth + 1,
-                    max_error_depth,
-                )
-            else:
-                logging.exception("Rendering failed after multiple attempts.")
-                raise
-
-
 def select_background_resolution(width: int) -> Tuple[int, int]:
     """Choose an output resolution based on the clip width."""
     if width < 840:
@@ -867,49 +819,283 @@ def select_background_resolution(width: int) -> Tuple[int, int]:
     return 2160, 3840
 
 
-def get_final_clip(
-    clip: VideoFileClip,
+def get_render_params(
+    video_path: Path,
     start_point: float,
     final_clip_length: float,
     config: ProcessingConfig,
-) -> VideoFileClip:
-    """Prepare a clip ready for rendering."""
+) -> RenderParams:
+    """Calculate all parameters needed for rendering the final clip."""
 
-    result_clip = clip.subclipped(start_point, start_point + final_clip_length)
+    # Use decord CPU to get dimensions quickly
+    try:
+        vr = VideoReader(str(video_path), ctx=cpu(0))
+        h, w, _ = vr[0].shape
+    except Exception:
+        # Fallback to GPU context if CPU fails (unlikely)
+        vr = VideoReader(str(video_path))
+        h, w, _ = vr[0].shape
 
-    width, height = result_clip.size
+    # Calculate crop parameters (same logic as before: crop to target ratio)
+    current_ratio = w / h
     target_ratio = config.target_ratio_w / config.target_ratio_h
-    if width / height > target_ratio:
-        result_clip = crop_clip(
-            result_clip,
-            config.target_ratio_w,
-            config.target_ratio_h,
-            config.x_center,
-            config.y_center,
-        )
 
-    width, height = result_clip.size
-    bg_w, bg_h = select_background_resolution(width)
-    result_clip = result_clip.resized(width=bg_w)
+    if current_ratio > target_ratio:
+        # Too wide, crop width
+        new_width = round(h * config.target_ratio_w / config.target_ratio_h)
+        crop_w = new_width
+        crop_h = h
+        crop_x = int(w * config.x_center - crop_w / 2)
+        crop_y = int(h * config.y_center - crop_h / 2)
+    else:
+        # Too tall, crop height
+        new_height = round(w / config.target_ratio_w * config.target_ratio_h)
+        crop_w = w
+        crop_h = new_height
+        crop_x = int(w * config.x_center - crop_w / 2)
+        crop_y = int(h * config.y_center - crop_h / 2)
 
-    if width >= height:
-        background_clip = clip.subclipped(start_point, start_point + final_clip_length)
-        background_clip = crop_clip(background_clip, 1, 1, config.x_center, config.y_center)
-        background_clip = background_clip.resized(width=720, height=720)
-        # Apply GPU-accelerated blur
-        background_clip = background_clip.image_transform(blur)
-        background_clip = background_clip.resized(width=bg_w, height=bg_w)
-        result_clip = CompositeVideoClip([background_clip, result_clip.with_position("center")])
-    elif width / 9 < height / 16:
-        background_clip = clip.subclipped(start_point, start_point + final_clip_length)
-        background_clip = crop_clip(background_clip, 9, 16, config.x_center, config.y_center)
-        background_clip = background_clip.resized(width=720, height=1280)
-        # Apply GPU-accelerated blur
-        background_clip = background_clip.image_transform(blur)
-        background_clip = background_clip.resized(width=bg_w, height=bg_h)
-        result_clip = CompositeVideoClip([background_clip, result_clip.with_position("center")])
+    # Clamp crop coordinates
+    crop_x = max(0, min(w - crop_w, crop_x))
+    crop_y = max(0, min(h - crop_h, crop_y))
 
-    return result_clip
+    # Calculate background/output resolution
+    bg_w, bg_h = select_background_resolution(crop_w)
+
+    # Logic from get_final_clip to determine layout
+    is_vertical_bg = False
+
+    if crop_w >= crop_h:
+        # Landscape/Squareish
+        # "background_clip = background_clip.resized(width=720, height=720)"
+        # "result_clip = result_clip.resized(width=bg_w)" -> final output is bg_w x bg_w
+        # This implies we want a square output if the main clip is landscape/square
+        bg_h = bg_w # Force square output
+        is_vertical_bg = False
+    elif crop_w / 9 < crop_h / 16:
+         # Very tall portrait
+         is_vertical_bg = True
+    else:
+        # Default fallback
+        pass
+
+    return RenderParams(
+        source_path=video_path,
+        start_time=start_point,
+        duration=final_clip_length,
+        output_width=bg_w,
+        output_height=bg_h,
+        crop_x=crop_x,
+        crop_y=crop_y,
+        crop_w=crop_w,
+        crop_h=crop_h,
+        bg_width=bg_w,
+        bg_height=bg_h,
+        is_vertical_bg=is_vertical_bg
+    )
+
+
+def render_video_gpu(
+    params: RenderParams,
+    output_path: Path,
+    max_error_depth: int = 3,
+) -> None:
+    """Render the clip using GPU compositing and FFMPEG NVENC."""
+
+    logging.info(f"Rendering GPU: {output_path.name}")
+
+    # 1. Extract audio
+    temp_audio = output_path.with_suffix(".aac")
+    cmd_audio = [
+        "ffmpeg", "-y",
+        "-ss", f"{params.start_time:.3f}",
+        "-t", f"{params.duration:.3f}",
+        "-i", str(params.source_path),
+        "-vn", "-acodec", "copy",
+        str(temp_audio)
+    ]
+    subprocess.run(cmd_audio, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+
+    # 2. Setup FFMPEG process for video encoding
+    # We will write raw RGB frames to stdin
+    fps = 30 # Target FPS (or derive from source)
+
+    # Get source FPS
+    try:
+        vr_probe = VideoReader(str(params.source_path), ctx=cpu(0))
+        src_fps = vr_probe.get_avg_fps()
+        # Cap FPS at 60
+        fps = min(src_fps, 60.0)
+    except:
+        fps = 30.0
+
+    cmd_ffmpeg = [
+        "ffmpeg", "-y",
+        "-f", "rawvideo",
+        "-vcodec", "rawvideo",
+        "-s", f"{params.output_width}x{params.output_height}",
+        "-pix_fmt", "rgb24",
+        "-r", f"{fps}",
+        "-i", "-", # Input from pipe
+        "-i", str(temp_audio), # Audio input
+        "-c:v", "h264_nvenc",
+        "-preset", "p4",
+        "-c:a", "aac",
+        "-shortest",
+        str(output_path)
+    ]
+
+    # If temp audio failed, remove audio input
+    if not temp_audio.exists():
+        cmd_ffmpeg = [x for x in cmd_ffmpeg if x not in ["-i", str(temp_audio), "-c:a", "aac"]]
+
+    process = subprocess.Popen(cmd_ffmpeg, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+
+    # 3. GPU Rendering Loop
+    try:
+        ctx = gpu(0) if torch.cuda.is_available() else cpu(0)
+
+        # Calculate resize dims for background and foreground
+        fg_w = params.output_width
+        fg_h = int(params.crop_h * (params.output_width / params.crop_w))
+
+        # Background dims logic
+        bg_crop_w, bg_crop_h, bg_crop_x, bg_crop_y = 0, 0, 0, 0
+        vr_temp = VideoReader(str(params.source_path), ctx=cpu(0))
+        src_h, src_w, _ = vr_temp[0].shape
+
+        if params.is_vertical_bg:
+            # 9:16 crop of source for BG
+            bg_ratio_w, bg_ratio_h = 9, 16
+            if (src_w / src_h) > (bg_ratio_w / bg_ratio_h):
+                 bg_crop_h = src_h
+                 bg_crop_w = int(src_h * bg_ratio_w / bg_ratio_h)
+            else:
+                 bg_crop_w = src_w
+                 bg_crop_h = int(src_w * bg_ratio_h / bg_ratio_w)
+
+            bg_crop_x = int(src_w * 0.5 - bg_crop_w / 2)
+            bg_crop_y = int(src_h * 0.5 - bg_crop_h / 2)
+
+        else:
+            # 1:1 crop of source for BG
+            bg_crop_h = min(src_w, src_h)
+            bg_crop_w = min(src_w, src_h)
+            bg_crop_x = int(src_w * 0.5 - bg_crop_w / 2)
+            bg_crop_y = int(src_h * 0.5 - bg_crop_h / 2)
+
+        # Optimization: Calculate effective load size if 4K
+        # If source is huge, we can downscale a bit, but we need quality for FG.
+        # Let's trust decord to be fast enough on GPU.
+        vr = VideoReader(str(params.source_path), ctx=ctx)
+
+        # Calculate frames to read
+        total_frames = int(params.duration * fps)
+        src_fps = vr.get_avg_fps()
+        frame_indices = []
+        for i in range(total_frames):
+             t = params.start_time + (i / fps)
+             idx = int(t * src_fps)
+             frame_indices.append(idx)
+
+        # Process in batches
+        batch_size = 8
+        for i in range(0, len(frame_indices), batch_size):
+            batch_idxs = frame_indices[i : i + batch_size]
+            batch_idxs = [min(x, len(vr)-1) for x in batch_idxs]
+
+            try:
+                frames = vr.get_batch(batch_idxs) # (B, H, W, 3)
+            except Exception as e:
+                logging.warning(f"Failed to read batch: {e}")
+                break
+
+            # Process batch
+            B, H, W, C = frames.shape
+
+            # 1. Create Background
+            bg_frames = frames[:, bg_crop_y:bg_crop_y+bg_crop_h, bg_crop_x:bg_crop_x+bg_crop_w, :]
+
+            # Resize BG to small for blur
+            bg_frames = bg_frames.permute(0, 3, 1, 2).float() # (B, 3, H, W)
+
+            blur_target_w = 720
+            blur_target_h = 1280 if params.is_vertical_bg else 720
+
+            bg_small = torch.nn.functional.interpolate(
+                bg_frames, size=(blur_target_h, blur_target_w), mode='bilinear', align_corners=False
+            )
+
+            # Blur
+            bg_small = bg_small.permute(0, 2, 3, 1) # (B, H, W, 3)
+            if not bg_small.is_contiguous():
+                bg_small = bg_small.contiguous()
+
+            # Transfer to CuPy
+            cp_bg = cp.from_dlpack(torch.to_dlpack(bg_small))
+            f_bg = cp_bg.astype(float)
+
+            # Apply blur
+            blurred_bg_cp = cupyx.scipy.ndimage.gaussian_filter(f_bg, sigma=(0, 16, 16, 0))
+            blurred_bg_cp = blurred_bg_cp.astype(cp_bg.dtype)
+            blurred_bg = torch.from_dlpack(cp.to_dlpack(blurred_bg_cp))
+
+            # Resize BG to final Output Size
+            blurred_bg = blurred_bg.permute(0, 3, 1, 2).float() # (B, 3, H, W)
+            final_bg = torch.nn.functional.interpolate(
+                blurred_bg, size=(params.output_height, params.output_width), mode='bilinear', align_corners=False
+            )
+
+            # 2. Create Foreground
+            fg_frames = frames[:, params.crop_y:params.crop_y+params.crop_h, params.crop_x:params.crop_x+params.crop_w, :]
+            fg_frames = fg_frames.permute(0, 3, 1, 2).float()
+            final_fg = torch.nn.functional.interpolate(
+                fg_frames, size=(fg_h, fg_w), mode='bilinear', align_corners=False
+            )
+
+            # 3. Composite
+            y_offset = (params.output_height - fg_h) // 2
+            x_offset = (params.output_width - fg_w) // 2
+
+            y1 = max(0, y_offset)
+            y2 = min(params.output_height, y_offset + fg_h)
+            x1 = max(0, x_offset)
+            x2 = min(params.output_width, x_offset + fg_w)
+
+            sy1 = -y_offset if y_offset < 0 else 0
+            sx1 = -x_offset if x_offset < 0 else 0
+
+            h_seg = y2 - y1
+            w_seg = x2 - x1
+            sy2 = sy1 + h_seg
+            sx2 = sx1 + w_seg
+
+            if h_seg > 0 and w_seg > 0:
+                final_bg[:, :, y1:y2, x1:x2] = final_fg[:, :, sy1:sy2, sx1:sx2]
+
+            # 4. Write to Pipe
+            out_frames = final_bg.permute(0, 2, 3, 1).byte().cpu().numpy()
+            process.stdin.write(out_frames.tobytes())
+
+            del frames, bg_frames, bg_small, blurred_bg, final_bg, fg_frames, final_fg, out_frames
+
+    except Exception as e:
+        logging.error(f"Error during GPU render: {e}", exc_info=True)
+    finally:
+        if process:
+            try:
+                process.stdin.close()
+            except: pass
+            process.wait()
+            if process.returncode != 0:
+                stderr_out = process.stderr.read().decode()
+                logging.error(f"FFMPEG Error: {stderr_out}")
+
+        if temp_audio.exists():
+            temp_audio.unlink()
+
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
 
 def combine_scenes(scene_list: Sequence[Tuple], config: ProcessingConfig) -> List[List]:
@@ -1088,7 +1274,19 @@ def process_video(video_file: Path, config: ProcessingConfig, output_dir: Path) 
             scene[1].get_frames(),
         )
 
-    video_clip = VideoFileClip(str(video_file))
+    # We need to get video duration efficiently. Use VideoReader on CPU.
+    try:
+        vr_probe = VideoReader(str(video_file), ctx=cpu(0))
+        video_duration = len(vr_probe) / vr_probe.get_avg_fps()
+        del vr_probe
+    except Exception:
+        # Fallback to MoviePy if decord fails (legacy support)
+        logging.warning("Decord probe failed, using MoviePy to check duration.")
+        from moviepy import VideoFileClip
+        video_clip = VideoFileClip(str(video_file))
+        video_duration = video_clip.duration
+        video_clip.close()
+
     truncated_list = sorted_processed_scene_list[: config.scene_limit]
 
     if truncated_list:
@@ -1113,42 +1311,49 @@ def process_video(video_file: Path, config: ProcessingConfig, output_dir: Path) 
                 short_length,
             )
 
-            final_clip = get_final_clip(
-                video_clip,
+            render_file_name = f"{video_file.stem} scene-{i}{video_file.suffix}"
+            render_path = output_dir / render_file_name
+
+            # Prepare render params
+            params = get_render_params(
+                video_file,
                 best_start,
-                short_length,
-                config,
+                float(short_length),
+                config
             )
 
-            render_file_name = f"{video_file.stem} scene-{i}{video_file.suffix}"
-            render_video(
-                final_clip,
-                Path(render_file_name),
-                output_dir,
+            # Execute GPU render
+            render_video_gpu(
+                params,
+                render_path,
                 max_error_depth=config.max_error_depth,
             )
     else:
+        # No scenes found, fallback to random clip
         short_length = random.randint(
             config.min_short_length, config.max_short_length
         )
 
-        if video_clip.duration < config.max_short_length:
-            adapted_short_length = min(math.floor(video_clip.duration), short_length)
+        if video_duration < config.max_short_length:
+            adapted_short_length = min(math.floor(video_duration), short_length)
         else:
             adapted_short_length = short_length
 
-        min_start_point = min(10, math.floor(video_clip.duration) - adapted_short_length)
-        max_start_point = math.floor(video_clip.duration - adapted_short_length)
-        final_clip = get_final_clip(
-            video_clip,
-            random.randint(min_start_point, max_start_point),
-            adapted_short_length,
-            config,
-        )
-        render_video(
-            final_clip,
+        min_start_point = min(10, math.floor(video_duration) - adapted_short_length)
+        max_start_point = math.floor(video_duration - adapted_short_length)
+
+        start_point = float(random.randint(int(min_start_point), int(max_start_point)))
+
+        params = get_render_params(
             video_file,
-            output_dir,
+            start_point,
+            float(adapted_short_length),
+            config
+        )
+
+        render_video_gpu(
+            params,
+            output_dir / video_file.name,
             max_error_depth=config.max_error_depth,
         )
 
