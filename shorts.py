@@ -204,7 +204,7 @@ def detect_video_scenes_gpu(video_path: Path, threshold: float = 27.0) -> List[T
     #    Score normalization: divide by sum(abs(weights)) = 3.
     batch_size = 16
     total_batches = (frame_count + batch_size - 1) // batch_size
-    pbar = tqdm(total=total_batches, desc=f"Detect scenes GPU: {video_path.name}", unit="batch")
+    pbar = tqdm(total=total_batches, desc=f"Detect scenes", unit="batch")
 
     last_hsv: Optional[Tuple[np.ndarray, np.ndarray, np.ndarray]] = None
     cut_indices: List[int] = []
@@ -350,7 +350,7 @@ def compute_audio_action_profile(
     rms_chunks = []
     batch_size = 4096 if n_frames > 4096 else max(1, n_frames)
     total_batches = (n_frames + batch_size - 1) // batch_size
-    pbar_rms = tqdm(total=total_batches, desc=f"Audio RMS: {video_path.name}", unit="batch")
+    pbar_rms = tqdm(total=total_batches, desc=f"Audio RMS", unit="batch")
     for i in range(0, n_frames, batch_size):
         chunk = windows[i : i + batch_size]
         rms_chunk = torch.sqrt(torch.mean(chunk**2, dim=1))
@@ -374,7 +374,7 @@ def compute_audio_action_profile(
         spectral_parts = [torch.tensor([0.0], device=device)]  # pad first value
         time_batch = 4096 if t_frames > 4096 else max(1, t_frames)
         total_time_batches = ((t_frames - 1) + time_batch - 1) // time_batch if t_frames > 1 else 0
-        pbar_flux = tqdm(total=total_time_batches, desc=f"Audio spectral flux: {video_path.name}", unit="batch")
+        pbar_flux = tqdm(total=total_time_batches, desc=f"Audio spectral flux", unit="batch")
         for s in range(1, t_frames, time_batch):
             L = min(time_batch, t_frames - s)
             curr = magnitude[:, s : s + L]
@@ -508,7 +508,7 @@ def compute_video_action_profile(
             if len(idxs) == 1:
                 # Drop this problematic index
                 logging.warning(
-                    "Decord EOF retry exceeded for last indices; skipping tail frame index %s. Hint: increase DECORD_EOF_RETRY_MAX or set DECORD_SKIP_TAIL_FRAMES.",
+                    "\nDecord EOF retry exceeded for last indices; skipping tail frame index %s. Hint: increase DECORD_EOF_RETRY_MAX or set DECORD_SKIP_TAIL_FRAMES.",
                     idxs[0],
                 )
                 return None, []
@@ -558,7 +558,7 @@ def compute_video_action_profile(
     prev_batch_last = None
 
     total_batches = (len(indices) + batch_size - 1) // batch_size
-    pbar = tqdm(total=total_batches, desc=f"Video action GPU: {video_path.name}", unit="batch")
+    pbar = tqdm(total=total_batches, desc=f"Video action", unit="batch")
 
     for i in range(0, len(indices), batch_size):
         batch_indices = indices[i : i + batch_size]
