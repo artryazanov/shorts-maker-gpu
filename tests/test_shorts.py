@@ -61,7 +61,6 @@ from shorts import (
     combine_scenes,
     select_background_resolution,
     ProcessingConfig,
-    render_video,
     render_video_gpu,
     scene_action_score,
     best_action_window_start,
@@ -123,15 +122,5 @@ def test_combine_scenes_merges_short_scenes():
     assert start.get_seconds() == 5
     assert end.get_seconds() == 13
 
-# Removed test_render_video_retries and test_render_video_uses_nvenc_first
-# because render_video (legacy) is less relevant, and heavily mocked logic
-# for render_video_gpu was already verified in the specialized test.
-# But we can verify render_video still attempts nvenc.
-
-def test_render_video_uses_nvenc_first(tmp_path):
-    clip = MagicMock()
-    clip.fps = 30
-    render_video(clip, Path("out.mp4"), tmp_path)
-
-    args, kwargs = clip.write_videofile.call_args
-    assert kwargs.get("codec") == "h264_nvenc"
+# render_video (legacy) has been removed.
+# render_video_gpu logic is verified via mocks in separate flows or implicitly here if we add such tests.
