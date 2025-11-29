@@ -1098,8 +1098,51 @@ def render_video_gpu(
         if temp_audio.exists():
             temp_audio.unlink()
 
+        # Explicit GPU/video-memory cleanup to avoid leaks after rendering.
+        # 1) Ensure ffmpeg process reference is released asap
+        try:
+            del process
+        except Exception:
+            pass
+
+        # 2) Release decord readers (GPU contexts) if they were created
+        try:
+            del vr
+        except Exception:
+            pass
+        try:
+            del vr_temp
+        except Exception:
+            pass
+
+        # 3) Synchronize and free CuPy memory pools
+        try:
+            try:
+                cp.cuda.Device().synchronize()
+            except Exception:
+                pass
+            cp.get_default_memory_pool().free_all_blocks()
+            cp.get_default_pinned_memory_pool().free_all_blocks()
+        except Exception:
+            pass
+
+        # 4) Torch CUDA cleanup
         if torch.cuda.is_available():
+            try:
+                torch.cuda.synchronize()
+            except Exception:
+                pass
+            try:
+                torch.cuda.ipc_collect()
+            except Exception:
+                pass
             torch.cuda.empty_cache()
+
+        # 5) Final GC sweep
+        try:
+            gc.collect()
+        except Exception:
+            pass
 
 
 def combine_scenes(scene_list: Sequence[Tuple], config: ProcessingConfig) -> List[List]:
