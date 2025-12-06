@@ -979,7 +979,20 @@ def render_video_gpu(
     if not temp_audio.exists():
         cmd_ffmpeg = [x for x in cmd_ffmpeg if x not in ["-i", str(temp_audio), "-c:a", "aac"]]
 
-    process = subprocess.Popen(cmd_ffmpeg, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+    # redirect stderr to a file to prevent buffer deadlock
+    log_path = output_path.with_suffix(".ffmpeg.log")
+    ffmpeg_log = open(log_path, "w")
+
+    try:
+        process = subprocess.Popen(
+            cmd_ffmpeg,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.DEVNULL,
+            stderr=ffmpeg_log
+        )
+    except Exception:
+        ffmpeg_log.close()
+        raise
 
     # 3. GPU Rendering Loop
     # Use torch.no_grad() to prevent graph building overhead
@@ -1025,6 +1038,8 @@ def render_video_gpu(
 
             with tqdm(total=total_batches, desc="Video render", unit="batch") as pbar_render:
                 for i in range(0, len(frame_indices), BATCH_SIZE):
+                    if i % (BATCH_SIZE * 50) == 0:
+                        logging.info(f"Rendering batch {i // BATCH_SIZE}/{total_batches}")
 
                     # REMOVED: The block causing the leak (del vr / new vr)
 
@@ -1116,6 +1131,9 @@ def render_video_gpu(
                 except:
                     pass
                 process.wait()
+
+            if 'ffmpeg_log' in locals() and ffmpeg_log:
+                ffmpeg_log.close()
 
             if temp_audio.exists():
                 temp_audio.unlink()
