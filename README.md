@@ -4,6 +4,13 @@ Shorts Maker generates vertical video clips from longer gameplay footage. The sc
 
 **This version has been heavily optimized for NVIDIA GPUs using CUDA.**
 
+[![Tests](https://github.com/artryazanov/shorts-maker-gpu/actions/workflows/testing.yml/badge.svg)](https://github.com/artryazanov/shorts-maker-gpu/actions/workflows/testing.yml)
+[![License: Unlicense](https://img.shields.io/badge/license-Unlicense-blue.svg)](http://unlicense.org/)
+![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue)
+![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=flat&logo=docker&logoColor=white)
+![PyTorch](https://img.shields.io/badge/PyTorch-%23EE4C2C.svg?style=flat&logo=PyTorch&logoColor=white)
+![CUDA](https://img.shields.io/badge/CUDA-12.1-green)
+
 ## Features
 
 - **GPU-Accelerated Processing**:
