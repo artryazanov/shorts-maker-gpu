@@ -25,6 +25,10 @@ For the original CPU-only version, please visit [Shorts Maker](https://github.co
 - Audio + video action scoring:
   - Combined ranking with tunable weights (defaults: audio 0.6, video 0.4).
 - Scenes ranked by combined action score rather than duration.
+- **Smart Scene Cutting**:
+  - Preferentially selects complete scenes if they fit within the time limit.
+  - **Scene Padding**: Adds a 1.5-second buffer to the end of scenes to capture exit animations and fades.
+  - **Smart Trimming**: For long scenes, searches for "quiet" moments (low audio/motion) to cut, avoiding abrupt endings.
 - Smart cropping with optional blurred background for non‑vertical footage.
 - Retry logic during rendering to avoid spurious failures.
 - Configuration via `.env` environment variables.
