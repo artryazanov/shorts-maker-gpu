@@ -53,7 +53,6 @@ sys.modules["cupyx.scipy.ndimage"] = MagicMock()
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 # Import shorts AFTER mocking
-import shorts  # noqa: E402
 from shorts import find_smart_end_point  # noqa: E402
 
 
