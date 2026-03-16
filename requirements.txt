@@ -5,7 +5,7 @@ opencv-python==4.9.0.80
 pytest==8.4.2
 pytest-cov==6.0.0
 pytest-mock==3.14.0
-python-dotenv==1.2.1
+python-dotenv==1.2.2
 random2==1.0.2
 soundfile==0.13.1
 tqdm
