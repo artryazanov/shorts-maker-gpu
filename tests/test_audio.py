@@ -40,7 +40,6 @@ class FakeTensor:
 
     def view(self, *args, **kwargs):
         # A rough emulation
-        s = getattr(self, "shape", getattr(self, "_shape", (1,)))
         if args and args[0] == -1:
             return FakeTensor(shape=(self._numel,), numel=self._numel)
         return FakeTensor(shape=(len(args),), numel=self._numel)
@@ -72,12 +71,11 @@ class FakeTensor:
         return self._shape[0] if self._shape else 0
 
 
-import tests.mock_gpu
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
-import shorts
-from shorts import compute_audio_action_profile
+import shorts  # noqa: E402
+from shorts import compute_audio_action_profile  # noqa: E402
 
 def test_compute_audio_action_profile_load_failure():
     shorts.torchaudio.load.side_effect = Exception("Failed")

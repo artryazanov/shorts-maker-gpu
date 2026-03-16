@@ -1,9 +1,7 @@
 import sys
 from pathlib import Path
-from unittest import mock
 import numpy as np
 
-import tests.mock_gpu
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 from shorts import _SecondsTime, _best_window_single, best_action_window_start

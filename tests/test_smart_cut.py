@@ -1,12 +1,10 @@
 import sys
-from unittest.mock import MagicMock
 import numpy as np
 from pathlib import Path
 
 # --- Mock GPU libraries BEFORE importing shorts ---
 # We must mock decord, cupy, torchaudio, torch so that shorts.py can be imported
 # even if these libraries are missing or if we are on a CPU-only node.
-import tests.mock_gpu
 
 
 

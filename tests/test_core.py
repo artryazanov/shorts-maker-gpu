@@ -3,7 +3,6 @@ from pathlib import Path
 from unittest import mock
 import numpy as np
 
-import tests.mock_gpu
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 import shorts

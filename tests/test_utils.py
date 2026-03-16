@@ -1,10 +1,6 @@
 import sys
-from unittest.mock import MagicMock
 from pathlib import Path
-import os
-import pytest
 
-import tests.mock_gpu
 
 # Ensure the project root is on the import path.
 sys.path.append(str(Path(__file__).resolve().parent.parent))

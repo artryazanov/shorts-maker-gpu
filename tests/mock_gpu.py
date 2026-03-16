@@ -45,9 +45,7 @@ class FakeTensor:
     def cpu(self):
         return self
 
-    def numpy(self):
-        import numpy as np
-        return np.array([0.1, 0.2, 0.3])
+
 
     def view(self, *args, **kwargs):
         if args and args[0] == -1:
