@@ -4,7 +4,6 @@ from unittest import mock
 
 import tests.mock_gpu  # noqa: F401
 sys.path.append(str(Path(__file__).resolve().parent.parent))
-import tests.mock_gpu  # noqa: F401
 import shorts  # noqa: E402
 from shorts import ProcessingConfig  # noqa: E402
 
