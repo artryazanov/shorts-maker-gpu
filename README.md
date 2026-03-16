@@ -144,10 +144,6 @@ Note: The tests are designed to mock GPU availability if it is missing, so they 
 - **"Torch not installed" / "CUDA not available"**: Ensure you are running inside the Docker container with `--gpus all` or have the correct CUDA toolkit installed locally.
 - **NVENC Error**: If `h264_nvenc` fails, the script attempts to fall back to software encoding (`libx264`). Check if your GPU supports NVENC and if the drivers are up to date.
 
-## Acknowledgments
-
-Thank the Binary-Bytes for the original code and idea: https://github.com/Binary-Bytes/Auto-YouTube-Shorts-Maker
-
 ## License
 
 This project is released under the [Unlicense](LICENSE).
