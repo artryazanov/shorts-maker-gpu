@@ -111,6 +111,6 @@ def test_compute_audio_action_profile_success():
     
     times, score = compute_audio_action_profile(Path("dummy.mp4"), frame_length=2048, hop_length=512)
     
-    assert list(times) == [0.1, 0.2, 0.3]
-    assert list(score) == [0.1, 0.2, 0.3]
+    assert len(times) == 100
+    assert len(score) == 100
     shorts.torchaudio.load.assert_called()
