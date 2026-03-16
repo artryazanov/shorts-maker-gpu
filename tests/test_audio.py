@@ -36,7 +36,7 @@ class FakeTensor:
         return self
 
     def numpy(self):
-        return np.array([0.1, 0.2, 0.3])
+        return np.zeros(self._shape if self._shape else (1,), dtype=np.float32)
 
     def view(self, *args, **kwargs):
         # A rough emulation
