@@ -8,8 +8,9 @@ For the original CPU-only version, please visit [Shorts Maker](https://github.co
 
 [![Tests](https://github.com/artryazanov/shorts-maker-gpu/actions/workflows/testing.yml/badge.svg)](https://github.com/artryazanov/shorts-maker-gpu/actions/workflows/testing.yml)
 [![Linting](https://github.com/artryazanov/shorts-maker-gpu/actions/workflows/linting.yml/badge.svg)](https://github.com/artryazanov/shorts-maker-gpu/actions/workflows/linting.yml)
+[![codecov](https://codecov.io/gh/artryazanov/shorts-maker-gpu/graph/badge.svg)](https://codecov.io/gh/artryazanov/shorts-maker-gpu)
 [![License: Unlicense](https://img.shields.io/badge/license-Unlicense-blue.svg)](http://unlicense.org/)
-![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue)
+![Python](https://img.shields.io/badge/python-3.12%20%7C%203.13%20%7C%203.14-blue)
 ![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=flat&logo=docker&logoColor=white)
 ![PyTorch](https://img.shields.io/badge/PyTorch-%23EE4C2C.svg?style=flat&logo=PyTorch&logoColor=white)
 ![CUDA](https://img.shields.io/badge/CUDA-12.1-green)
@@ -37,7 +38,7 @@ For the original CPU-only version, please visit [Shorts Maker](https://github.co
 
 - **NVIDIA GPU** with CUDA support.
 - **NVIDIA Drivers** (compatible with CUDA 12.1+ recommended).
-- Python 3.10+
+- Python 3.12+
 - FFmpeg (required by `moviepy`).
 - System libraries: `libgl1`, `libglib2.0-0` (often needed for vision libraries).
 
