@@ -12,7 +12,7 @@ from pathlib import Path
 # Ensure the project root is on the import path.
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
-# Import shorts AFTER mocking
+import tests.mock_gpu  # noqa: F401, E402
 import shorts  # noqa: E402
 from shorts import (  # noqa: E402
     blur_gpu,
@@ -93,7 +93,6 @@ def test_compute_video_action_profile_sequential():
 
     # Configure get_batch to return a FakeTensor
     def side_effect_get_batch(indices):
-import tests.mock_gpu  # noqa: F401
         count = len(indices)
         return FakeTensor(shape=(count, 64, 64, 3), numel=count*64*64*3)
 
