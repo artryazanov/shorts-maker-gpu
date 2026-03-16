@@ -74,6 +74,7 @@ class FakeTensor:
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
+import tests.mock_gpu  # noqa: F401
 import shorts  # noqa: E402
 from shorts import compute_audio_action_profile  # noqa: E402
 

@@ -93,7 +93,7 @@ def test_compute_video_action_profile_sequential():
 
     # Configure get_batch to return a FakeTensor
     def side_effect_get_batch(indices):
-        from tests.mock_gpu import FakeTensor
+import tests.mock_gpu  # noqa: F401
         count = len(indices)
         return FakeTensor(shape=(count, 64, 64, 3), numel=count*64*64*3)
 

@@ -4,8 +4,9 @@ from unittest import mock
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
-import shorts
-from shorts import detect_video_scenes_gpu
+import tests.mock_gpu  # noqa: F401
+import shorts  # noqa: E402
+from shorts import detect_video_scenes_gpu  # noqa: E402
 
 def test_detect_video_scenes_empty_video():
     """Test scene detection when video has 0 frames."""

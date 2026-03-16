@@ -5,7 +5,8 @@ from pathlib import Path
 # Ensure the project root is on the import path.
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
-import shorts
+import tests.mock_gpu  # noqa: F401
+import shorts  # noqa: E402
 
 def test_get_env_int(monkeypatch):
     monkeypatch.setenv("TEST_INT", "42")

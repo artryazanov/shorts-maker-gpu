@@ -5,8 +5,9 @@ import numpy as np
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
-import shorts
-from shorts import ProcessingConfig, _SecondsTime
+import tests.mock_gpu  # noqa: F401
+import shorts  # noqa: E402
+from shorts import ProcessingConfig, _SecondsTime  # noqa: E402
 
 def test_combine_scenes_empty():
     config = ProcessingConfig()

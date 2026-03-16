@@ -4,7 +4,8 @@ import numpy as np
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
-from shorts import _SecondsTime, _best_window_single, best_action_window_start
+import tests.mock_gpu  # noqa: F401
+from shorts import _SecondsTime, _best_window_single, best_action_window_start  # noqa: E402
 
 def test_best_window_single():
     scene = (_SecondsTime(0.0), _SecondsTime(10.0))

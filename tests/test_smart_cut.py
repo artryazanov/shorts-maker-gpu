@@ -12,6 +12,7 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 # Import shorts AFTER mocking
+import tests.mock_gpu  # noqa: F401
 from shorts import find_smart_end_point  # noqa: E402
 
 
