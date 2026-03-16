@@ -7,52 +7,12 @@ from pathlib import Path
 # We must mock decord, cupy, torchaudio, torch so that shorts.py can be imported
 # even if these libraries are missing or if we are on a CPU-only node.
 
-# Mock torch
-torch_mock = MagicMock()
-torch_mock.cuda.is_available.return_value = False
-torch_mock.device.return_value = "cpu"
-torch_mock.tensor = lambda x, **kwargs: MagicMock()
-# Mock basic tensor ops used in shorts
-torch_mock.abs = MagicMock()
-torch_mock.mean = MagicMock()
-torch_mock.sqrt = MagicMock()
-torch_mock.cat = MagicMock()
-torch_mock.from_numpy = lambda x: x
-torch_mock.from_dlpack = MagicMock()
-torch_mock.to_dlpack = MagicMock()
-torch_mock.nn.functional.interpolate = MagicMock()
-sys.modules["torch"] = torch_mock
-
-# Mock torchaudio
-torchaudio_mock = MagicMock()
-sys.modules["torchaudio"] = torchaudio_mock
-
-# Mock decord
-decord_mock = MagicMock()
-decord_mock.bridge.set_bridge = MagicMock()
-decord_mock.cpu = lambda x: f"cpu({x})"
-decord_mock.gpu = lambda x: f"gpu({x})"
-sys.modules["decord"] = decord_mock
-
-# Mock cupy
-cupy_mock = MagicMock()
-cupy_mock.asarray = MagicMock(side_effect=lambda x: x)
-cupy_mock.asnumpy = MagicMock(side_effect=lambda x: x)
-cupy_mock.from_dlpack = MagicMock()
-cupy_mock.to_dlpack = MagicMock()
-sys.modules["cupy"] = cupy_mock
-
-# Mock cupyx
-cupyx_mock = MagicMock()
-sys.modules["cupyx"] = cupyx_mock
-sys.modules["cupyx.scipy"] = MagicMock()
-sys.modules["cupyx.scipy.ndimage"] = MagicMock()
 
 
 # Ensure the project root is on the import path.
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
-# Import shorts AFTER mocking
+import tests.mock_gpu  # noqa: F401, E402
 import shorts  # noqa: E402
 from shorts import (  # noqa: E402
     blur_gpu,
@@ -131,60 +91,24 @@ def test_compute_video_action_profile_sequential():
     mock_frame.shape = (720, 1280, 3)
     mock_vr.__getitem__.return_value = mock_frame
 
-    # Configure torch.cat to return a mock with valid shape/numel
-    def side_effect_cat(tensors, **kwargs):
-        m = MagicMock()
-        m.shape = (100,)
-        m.numel.return_value = 100
-        m.mean.return_value = MagicMock(return_value=1.0)
-        m.std.return_value = MagicMock(return_value=1.0)
-        # Math operators return the same mock (so shape persists)
-        m.__sub__ = MagicMock(return_value=m)
-        m.__truediv__ = MagicMock(return_value=m)
-        m.view.return_value = m
-        return m
-    shorts.torch.cat.side_effect = side_effect_cat
-
-    # Configure get_batch to return a mock tensor
+    # Configure get_batch to return a FakeTensor
     def side_effect_get_batch(indices):
-        # Indices should be a range object
         count = len(indices)
-        batch_mock = MagicMock()
-        batch_mock.shape = (count, 64, 64, 3) # (B, H, W, C)
-        # Slicing returns itself
-        batch_mock.__getitem__.return_value = batch_mock
-        # float() returns itself
-        batch_mock.float.return_value = batch_mock
-        return batch_mock
+        return tests.mock_gpu.FakeTensor(shape=(count, 64, 64, 3), numel=count*64*64*3)
 
     mock_vr.get_batch.side_effect = side_effect_get_batch
 
-    # 2. Patch VideoReader in shorts
-    # Note: 'shorts.VideoReader' comes from 'decord', which we already mocked globally
-    # but we need the constructor to return our instance
     shorts.VideoReader.return_value = mock_vr
 
-    # 3. Run function
-    # fps=6 means we keep 1 out of 5 frames (30/6 = 5)
-    # Total frames 100.
-    # It should iterate 0..16, 16..32, ... (batch_size=16)
     times, scores = compute_video_action_profile(Path("dummy.mp4"), fps=6)
 
-    # 4. Verifications
     assert shorts.VideoReader.called
     assert mock_vr.get_batch.called
 
-    # Check calls to get_batch
-    # We expect ranges of size 16 starting from 0
     calls = mock_vr.get_batch.call_args_list
     assert len(calls) > 0
     
-    # First batch should comprise range(0, 16)
-    # The argument passed to get_batch is `batch_range`
     first_call_args = calls[0].args[0]
     assert list(first_call_args) == list(range(0, 16))
     
-    # Check that we handled results
-    # times and scores should be numpy arrays (mocked)
-    # Since torch.cat is mocked, it returns a MagicMock, and .cpu().numpy() returns a MagicMock
-    assert isinstance(times, MagicMock) or isinstance(times, np.ndarray) or (times == [])
+    assert isinstance(times, np.ndarray) or (times == [])

@@ -1333,6 +1333,41 @@ def split_overlong_scenes(combined_scene_list: List[List], config: ProcessingCon
     return result
 
 
+def find_smart_end_point(
+    start_time: float,
+    min_end: float,
+    max_end: float,
+    times: np.ndarray,
+    scores: np.ndarray,
+    search_window: float = 2.0
+) -> float:
+    """
+    Search for the best end point (with minimal action/volume)
+    in the range [max_end - search_window, max_end].
+    If no good point is found, returns max_end.
+    """
+    # Ensure we search within the allowed range
+    search_start = max(min_end, max_end - search_window)
+    search_finish = max_end
+
+    if search_finish <= search_start:
+        return search_finish
+
+    # Select score segment in the search area
+    mask = (times >= search_start) & (times <= search_finish)
+    if not np.any(mask):
+        return search_finish
+
+    t_seg = times[mask]
+    s_seg = scores[mask]
+
+    # Find index with minimum score value (silence/calmness)
+    min_idx = np.argmin(s_seg)
+    best_end_time = float(t_seg[min_idx])
+
+    return best_end_time
+
+
 def process_video(video_file: Path, config: ProcessingConfig, output_dir: Path) -> None:
     """Process a single video file and generate short clips."""
 
@@ -1365,6 +1400,18 @@ def process_video(video_file: Path, config: ProcessingConfig, output_dir: Path) 
     gc.collect()
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
+
+    # Pre-calculate video duration for boundary checks
+    try:
+        vr_probe = VideoReader(str(video_file), ctx=cpu(0))
+        video_duration = len(vr_probe) / vr_probe.get_avg_fps()
+        del vr_probe
+    except Exception:
+        logging.warning("Decord probe failed, using MoviePy to check duration.")
+        from moviepy import VideoFileClip
+        video_clip = VideoFileClip(str(video_file))
+        video_duration = video_clip.duration
+        video_clip.close()
 
     processed_scene_list = combine_scenes(scene_list, config)
     processed_scene_list = split_overlong_scenes(processed_scene_list, config)
@@ -1407,42 +1454,56 @@ def process_video(video_file: Path, config: ProcessingConfig, output_dir: Path) 
             scene[1].get_frames(),
         )
 
-    # We need to get video duration efficiently. Use VideoReader on CPU.
-    try:
-        vr_probe = VideoReader(str(video_file), ctx=cpu(0))
-        video_duration = len(vr_probe) / vr_probe.get_avg_fps()
-        del vr_probe
-    except Exception:
-        # Fallback to MoviePy if decord fails (legacy support)
-        logging.warning("Decord probe failed, using MoviePy to check duration.")
-        from moviepy import VideoFileClip
-        video_clip = VideoFileClip(str(video_file))
-        video_duration = video_clip.duration
-        video_clip.close()
-
     truncated_list = sorted_processed_scene_list[: config.scene_limit]
 
     if truncated_list:
         for i, scene in enumerate(truncated_list):
-            duration = math.floor(scene[1].get_seconds() - scene[0].get_seconds())
-            short_length = random.randint(
-                config.min_short_length, min(config.max_short_length, duration)
-            )
+            scene_start = scene[0].get_seconds()
+            scene_end = scene[1].get_seconds()
+            scene_duration = scene_end - scene_start
 
-            best_start = best_action_window_start(
-                scene,
-                float(short_length),
-                audio_times,
-                audio_score,
-                video_times,
-                video_score,
-            )
-            logging.info(
-                "Selected start %.2f for scene %d with window %ds",
-                best_start,
-                i,
-                short_length,
-            )
+            # STRATEGY 1: If scene fits entirely - take it all.
+            # We add a small padding (1.5s) to capture the "end scene animation/fade".
+            if scene_duration <= config.max_short_length:
+                final_start = scene_start
+                padding = 1.5
+                final_end = min(scene_end + padding, video_duration)
+                
+                # Check if padding pushes us over max limit
+                if (final_end - final_start) > config.max_short_length:
+                    final_end = final_start + config.max_short_length
+                
+                final_duration = final_end - final_start
+                logging.info(f"Scene {i}: Full scene + padding ({final_duration:.2f}s)")
+
+            # STRATEGY 2: Scene too long, cut best window with smart end.
+            else:
+                target_duration = float(config.max_short_length)
+
+                best_start = best_action_window_start(
+                    scene,
+                    target_duration,
+                    audio_times,
+                    audio_score,
+                    video_times,
+                    video_score,
+                )
+
+                absolute_min_end = best_start + config.min_short_length
+                absolute_max_end = min(scene_end, best_start + config.max_short_length)
+
+                final_end = find_smart_end_point(
+                    best_start,
+                    absolute_min_end,
+                    absolute_max_end,
+                    audio_times,
+                    audio_score,
+                    search_window=5.0
+                )
+
+                final_start = best_start
+                final_duration = final_end - final_start
+                logging.info(f"Scene {i}: Smart Cut. Start {final_start:.2f}, End {final_end:.2f} (Duration {final_duration:.2f}s)")
 
             render_file_name = f"{video_file.stem} scene-{i}{video_file.suffix}"
             render_path = output_dir / render_file_name
@@ -1450,8 +1511,8 @@ def process_video(video_file: Path, config: ProcessingConfig, output_dir: Path) 
             # Prepare render params
             params = get_render_params(
                 video_file,
-                best_start,
-                float(short_length),
+                final_start,
+                final_duration,
                 config
             )
 

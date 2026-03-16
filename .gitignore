@@ -7,3 +7,8 @@ generated/
 venv/
 .env
 *.mp4
+
+# Pytest and coverage
+.pytest_cache/
+.coverage
+coverage.xml

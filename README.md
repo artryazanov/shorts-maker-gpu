@@ -8,8 +8,9 @@ For the original CPU-only version, please visit [Shorts Maker](https://github.co
 
 [![Tests](https://github.com/artryazanov/shorts-maker-gpu/actions/workflows/testing.yml/badge.svg)](https://github.com/artryazanov/shorts-maker-gpu/actions/workflows/testing.yml)
 [![Linting](https://github.com/artryazanov/shorts-maker-gpu/actions/workflows/linting.yml/badge.svg)](https://github.com/artryazanov/shorts-maker-gpu/actions/workflows/linting.yml)
-[![License: Unlicense](https://img.shields.io/badge/license-Unlicense-blue.svg)](http://unlicense.org/)
-![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue)
+[![codecov](https://codecov.io/gh/artryazanov/shorts-maker-gpu/graph/badge.svg)](https://codecov.io/gh/artryazanov/shorts-maker-gpu)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+![Python](https://img.shields.io/badge/python-3.12%20%7C%203.13%20%7C%203.14-blue)
 ![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=flat&logo=docker&logoColor=white)
 ![PyTorch](https://img.shields.io/badge/PyTorch-%23EE4C2C.svg?style=flat&logo=PyTorch&logoColor=white)
 ![CUDA](https://img.shields.io/badge/CUDA-12.1-green)
@@ -25,6 +26,10 @@ For the original CPU-only version, please visit [Shorts Maker](https://github.co
 - Audio + video action scoring:
   - Combined ranking with tunable weights (defaults: audio 0.6, video 0.4).
 - Scenes ranked by combined action score rather than duration.
+- **Smart Scene Cutting**:
+  - Preferentially selects complete scenes if they fit within the time limit.
+  - **Scene Padding**: Adds a 1.5-second buffer to the end of scenes to capture exit animations and fades.
+  - **Smart Trimming**: For long scenes, searches for "quiet" moments (low audio/motion) to cut, avoiding abrupt endings.
 - Smart cropping with optional blurred background for non‑vertical footage.
 - Retry logic during rendering to avoid spurious failures.
 - Configuration via `.env` environment variables.
@@ -33,7 +38,7 @@ For the original CPU-only version, please visit [Shorts Maker](https://github.co
 
 - **NVIDIA GPU** with CUDA support.
 - **NVIDIA Drivers** (compatible with CUDA 12.1+ recommended).
-- Python 3.10+
+- Python 3.12+
 - FFmpeg (required by `moviepy`).
 - System libraries: `libgl1`, `libglib2.0-0` (often needed for vision libraries).
 
@@ -139,10 +144,6 @@ Note: The tests are designed to mock GPU availability if it is missing, so they 
 - **"Torch not installed" / "CUDA not available"**: Ensure you are running inside the Docker container with `--gpus all` or have the correct CUDA toolkit installed locally.
 - **NVENC Error**: If `h264_nvenc` fails, the script attempts to fall back to software encoding (`libx264`). Check if your GPU supports NVENC and if the drivers are up to date.
 
-## Acknowledgments
-
-Thank the Binary-Bytes for the original code and idea: https://github.com/Binary-Bytes/Auto-YouTube-Shorts-Maker
-
 ## License
 
-This project is released under the [Unlicense](LICENSE).
+This project is released under the [MIT License](LICENSE).
