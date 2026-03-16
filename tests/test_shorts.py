@@ -94,7 +94,7 @@ def test_compute_video_action_profile_sequential():
     # Configure get_batch to return a FakeTensor
     def side_effect_get_batch(indices):
         count = len(indices)
-        return FakeTensor(shape=(count, 64, 64, 3), numel=count*64*64*3)
+        return tests.mock_gpu.FakeTensor(shape=(count, 64, 64, 3), numel=count*64*64*3)
 
     mock_vr.get_batch.side_effect = side_effect_get_batch
 

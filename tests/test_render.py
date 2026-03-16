@@ -85,9 +85,9 @@ def test_render_video_gpu(mock_run, mock_popen, tmp_path):
         mock_vr_instance.__len__.return_value = 150
         mock_vr_instance.get_avg_fps.return_value = 30.0
         
-import tests.mock_gpu  # noqa: F401
+        mock_frame = tests.mock_gpu.FakeTensor(shape=(1080, 1920, 3), numel=1080*1920*3)
         mock_vr_instance.__getitem__.return_value = mock_frame
-import tests.mock_gpu  # noqa: F401
+        mock_vr_instance.get_batch.return_value = tests.mock_gpu.FakeTensor(shape=(4, 1080, 1920, 3), numel=4*1080*1920*3)
         mock_vr.return_value = mock_vr_instance
 
         params = shorts.get_render_params(Path("dummy.mp4"), 0.0, 1.0, config)
