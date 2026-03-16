@@ -5,6 +5,7 @@ demo/
 gameplay/
 generated/
 venv/
+.venv/
 .env
 *.mp4
 
