@@ -4,7 +4,7 @@ numpy<2.0.0
 opencv-python==4.9.0.80
 pytest==8.4.2
 pytest-cov==6.0.0
-pytest-mock==3.14.0
+pytest-mock==3.15.1
 python-dotenv==1.2.1
 tqdm
 # decord removed - install manually
