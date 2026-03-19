@@ -13,7 +13,7 @@ For the original CPU-only version, please visit [Shorts Maker](https://github.co
 ![Python](https://img.shields.io/badge/python-3.12%20%7C%203.13%20%7C%203.14-blue)
 ![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=flat&logo=docker&logoColor=white)
 ![PyTorch](https://img.shields.io/badge/PyTorch-%23EE4C2C.svg?style=flat&logo=PyTorch&logoColor=white)
-![CUDA](https://img.shields.io/badge/CUDA-12.1-green)
+![CUDA](https://img.shields.io/badge/CUDA-13.0-green)
 
 ## Features
 
@@ -38,7 +38,7 @@ For the original CPU-only version, please visit [Shorts Maker](https://github.co
 ## Requirements
 
 - **NVIDIA GPU** with CUDA support.
-- **NVIDIA Drivers** (compatible with CUDA 12.1+ recommended).
+- **NVIDIA Drivers** (compatible with CUDA 13.0+ recommended).
 - Python 3.12+
 - FFmpeg (required by `moviepy`).
 - System libraries: `libgl1`, `libglib2.0-0` (often needed for vision libraries).
@@ -106,9 +106,9 @@ Note the `--gpus all` flag, which is essential for the application to access har
 Copy `.env.example` to `.env` and adjust values as needed.
 
 Supported variables (defaults shown):
-- `TARGET_RATIO_W=1` — Width part of the target aspect ratio (e.g., 9 for 9:16).
-- `TARGET_RATIO_H=1` — Height part of the target aspect ratio (e.g., 16 for 9:16).
-- `SCENE_LIMIT=6` — Maximum number of top scenes rendered per source video.
+- `TARGET_RATIO_W=9` — Width part of the target aspect ratio (e.g., 9 for 9:16).
+- `TARGET_RATIO_H=16` — Height part of the target aspect ratio (e.g., 16 for 9:16).
+- `SCENE_LIMIT=4` — Maximum number of top scenes rendered per source video.
 - `X_CENTER=0.5` — Horizontal crop center in range [0.0, 1.0].
 - `Y_CENTER=0.5` — Vertical crop center in range [0.0, 1.0].
 - `MAX_ERROR_DEPTH=3` — Maximum retry depth if rendering fails.
