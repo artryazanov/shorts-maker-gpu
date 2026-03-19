@@ -13,9 +13,7 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 import tests.mock_gpu  # noqa: F401, E402
-import shorts  # noqa: E402
 from shorts import (  # noqa: E402
-    blur_gpu,
     combine_scenes,
     select_background_resolution,
     ProcessingConfig,
@@ -33,9 +31,6 @@ def test_select_background_resolution():
     assert select_background_resolution(800) == (720, 1280)
     assert select_background_resolution(1500) == (1440, 2560)
     assert select_background_resolution(2100) == (2160, 3840)
-
-
-
 
 
 def test_combine_scenes_merges_short_scenes():
