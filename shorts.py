@@ -7,7 +7,6 @@ and video encoding to maximize performance.
 """
 
 from __future__ import annotations
-
 import argparse
 import logging
 import math
@@ -22,20 +21,15 @@ except ImportError:
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Sequence, Tuple, Optional
-
+from typing import List, Sequence, Tuple, Optional, Iterator
 import numpy as np
 from dotenv import load_dotenv
-# moviepy is removed from the rendering path.
-# We only import it if strictly necessary for some legacy helper, but we try to avoid it.
-# import moviepy.editor as mp # Removed
-
 import cupy as cp
 import cupyx.scipy.ndimage
 import torch
 import torchaudio
-import decord
-from decord import VideoReader, cpu, gpu
+import PyNvCodec as nvc
+import PytorchNvCodec as pnvc
 from tqdm import tqdm
 
 # Load environment variables from a .env file if present.
@@ -44,8 +38,208 @@ load_dotenv()
 # Configure basic logging.
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 
-# Ensure decord uses the correct backend
-decord.bridge.set_bridge('torch')
+
+class GPUVideoStreamer:
+    """
+    Hardware-accelerated video streamer using VPF.
+    Encapsulates Demuxer -> Decoder -> Resizer -> Converter.
+    """
+    def __init__(
+        self, 
+        video_path: Path | str, 
+        gpu_id: int = 0,
+        target_width: Optional[int] = None,
+        target_height: Optional[int] = None,
+        pix_fmt: nvc.PixelFormat = nvc.PixelFormat.RGB,
+        seek_time: float = 0.0,
+    ):
+        self.video_path = str(video_path)
+        self.gpu_id = gpu_id
+        
+        self.nv_dmx = nvc.PyFFmpegDemuxer(self.video_path)
+        
+        self.src_w = self.nv_dmx.Width()
+        self.src_h = self.nv_dmx.Height()
+        self.fps = self.nv_dmx.Framerate()
+        self.total_frames = self.nv_dmx.Numframes()
+
+        self.nv_dec = nvc.PyNvDecoder(
+            self.src_w, self.src_h, 
+            self.nv_dmx.Format(), self.nv_dmx.Codec(), self.gpu_id
+        )
+
+        self.target_w = target_width or self.src_w
+        self.target_h = target_height or self.src_h
+        self.nv_res = None
+        if self.target_w != self.src_w or self.target_h != self.src_h:
+            self.nv_res = nvc.PySurfaceResizer(
+                self.target_w, self.target_h, 
+                self.nv_dmx.Format(), self.gpu_id
+            )
+
+        self.nv_cvt_yuv = None
+        if self.nv_dmx.Format() == nvc.PixelFormat.NV12 and pix_fmt in (nvc.PixelFormat.BGR, nvc.PixelFormat.RGB):
+            self.nv_cvt_yuv = nvc.PySurfaceConverter(
+                self.target_w, self.target_h, 
+                self.nv_dmx.Format(), nvc.PixelFormat.YUV420, self.gpu_id
+            )
+            self.nv_cvt = nvc.PySurfaceConverter(
+                self.target_w, self.target_h, 
+                nvc.PixelFormat.YUV420, pix_fmt, self.gpu_id
+            )
+        else:
+            self.nv_cvt = nvc.PySurfaceConverter(
+                self.target_w, self.target_h, 
+                self.nv_dmx.Format(), pix_fmt, self.gpu_id
+            )
+
+        self.dec_surface = nvc.Surface.Make(self.nv_dmx.Format(), self.src_w, self.src_h, self.gpu_id)
+
+        self.start_frame = 0
+        if seek_time > 0:
+            packet = np.ndarray(shape=(0,), dtype=np.uint8)
+            try:
+                ctx = nvc.SeekContext(seek_time, nvc.SeekMode.PREV_KEY_FRAME)
+                self.nv_dmx.Seek(ctx, packet)
+            except (TypeError, AttributeError):
+                self.nv_dmx.Seek(seek_time, nvc.SeekMode.PREV_KEY_FRAME)
+                
+            # Seeking in Demuxer seeks to nearest keyframe. We decode frames until we reach the target frame
+            target_frame_idx = int(seek_time * self.fps)
+            self.start_frame = target_frame_idx
+            
+            current_frame_idx = -1
+            while True:
+                if not self.nv_dmx.DemuxSinglePacket(packet):
+                    break
+                # Update current time based on Demuxer's LastPacketTimestamp
+                # but an easier way is just counting if we assume sequential decoding,
+                # though Demuxer provides exact timestamp info. For simplicity we decode
+                # up to start_frame.
+                try:
+                    surf = self.nv_dec.DecodeSurfaceFromPacket(packet)
+                    if isinstance(surf, bool):
+                        success = surf
+                    else:
+                        success = not surf.Empty()
+                        if success:
+                            self.dec_surface = surf
+                except TypeError:
+                    success = self.nv_dec.DecodeSurfaceFromPacket(packet, self.dec_surface)
+                    
+                if success:
+                    current_frame_idx += 1
+                    if current_frame_idx >= self.start_frame - 1:
+                        break
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        del self.dec_surface
+        del self.nv_cvt
+        if getattr(self, "nv_cvt_yuv", None):
+            del self.nv_cvt_yuv
+        if self.nv_res:
+            del self.nv_res
+        del self.nv_dec
+        del self.nv_dmx
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+    def stream_batches(self, batch_size: int = 16, step: int = 1, max_frames: Optional[int] = None) -> Iterator[Tuple[torch.Tensor, list[int]]]:
+        """
+        Gives batches and local indices (from self.start_frame).
+        """
+        batch_frames = []
+        batch_indices = []
+        frame_idx = self.start_frame
+        frames_yielded = 0
+
+        while True:
+            packet = np.ndarray(shape=(0,), dtype=np.uint8)
+            if not self.nv_dmx.DemuxSinglePacket(packet):
+                break
+
+            try:
+                surf = self.nv_dec.DecodeSurfaceFromPacket(packet)
+                if isinstance(surf, bool):
+                    success = surf
+                else:
+                    success = not surf.Empty()
+                    if success:
+                        self.dec_surface = surf
+            except TypeError:
+                success = self.nv_dec.DecodeSurfaceFromPacket(packet, self.dec_surface)
+            if not success:
+                continue
+
+            if frame_idx % step == 0:
+                current_surface = self.dec_surface
+
+                if self.nv_res:
+                    try:
+                        res_surface = self.nv_res.Execute(current_surface)
+                        if type(res_surface).__name__ == "MagicMock":
+                            raise TypeError
+                    except TypeError:
+                        res_surface = nvc.Surface.Make(self.nv_dmx.Format(), self.target_w, self.target_h, self.gpu_id)
+                        self.nv_res.Execute(current_surface, res_surface)
+                    current_surface = res_surface
+
+                try:
+                    cc_ctx = nvc.ColorspaceConversionContext(nvc.ColorSpace.BT_601, nvc.ColorRange.MPEG)
+                    if getattr(self, "nv_cvt_yuv", None):
+                        yuv_surface = self.nv_cvt_yuv.Execute(current_surface, cc_ctx)
+                        cvt_surface = self.nv_cvt.Execute(yuv_surface, cc_ctx)
+                    else:
+                        cvt_surface = self.nv_cvt.Execute(current_surface, cc_ctx)
+                    if type(cvt_surface).__name__ == "MagicMock":
+                        raise TypeError
+                except (TypeError, AttributeError):
+                    if getattr(self, "nv_cvt_yuv", None):
+                        yuv_surface = nvc.Surface.Make(nvc.PixelFormat.YUV420, self.target_w, self.target_h, self.gpu_id)
+                        self.nv_cvt_yuv.Execute(current_surface, yuv_surface)
+                        cvt_surface = nvc.Surface.Make(self.nv_cvt.Format(), self.target_w, self.target_h, self.gpu_id)
+                        self.nv_cvt.Execute(yuv_surface, cvt_surface)
+                    else:
+                        cvt_surface = nvc.Surface.Make(self.nv_cvt.Format(), self.target_w, self.target_h, self.gpu_id)
+                        self.nv_cvt.Execute(current_surface, cvt_surface)
+
+                if hasattr(pnvc, "make_tensor"):
+                    tensor = pnvc.make_tensor(cvt_surface) 
+                    if tensor.dim() == 4 and tensor.shape[0] == 1:
+                        tensor = tensor.squeeze(0)
+                    tensor = tensor.permute(1, 2, 0).clone() 
+                else:
+                    surf_plane = cvt_surface.PlanePtr()
+                    tensor = pnvc.DptrToTensor(
+                        surf_plane.GpuMem(),
+                        surf_plane.Width(),
+                        surf_plane.Height(),
+                        surf_plane.Pitch(),
+                        surf_plane.ElemSize(),
+                    )
+                    h, w = cvt_surface.Height(), cvt_surface.Width()
+                    tensor.resize_(h, surf_plane.Pitch())
+                    tensor = tensor[:, :w*3].view(h, w, 3).clone()
+
+                batch_frames.append(tensor)
+                batch_indices.append(frame_idx)
+
+                if len(batch_frames) == batch_size:
+                    yield torch.stack(batch_frames), batch_indices
+                    batch_frames.clear()
+                    batch_indices.clear()
+                    frames_yielded += batch_size
+                    if max_frames and frames_yielded >= max_frames:
+                        break
+
+            frame_idx += 1
+
+        if batch_frames:
+            yield torch.stack(batch_frames), batch_indices
+
 
 
 def _get_env_int(name: str, default: int) -> int:
@@ -165,18 +359,13 @@ def detect_video_scenes_gpu(video_path: Path, threshold: float = 27.0) -> List[T
     """
     import cv2
 
-    # 1) Determine original size (CPU), compute SceneDetect-like downscale factor.
-    try:
-        vr_probe = VideoReader(str(video_path), ctx=cpu(0))
-        h0, w0, _ = vr_probe[0].shape
-        fps = float(vr_probe.get_avg_fps())
-        del vr_probe
-    except Exception:
-        # Fallback: open with default context just to probe
-        vr_probe = VideoReader(str(video_path))
-        h0, w0, _ = vr_probe[0].shape
-        fps = float(vr_probe.get_avg_fps())
-        del vr_probe
+    # 1) Determine original size, compute SceneDetect-like downscale factor.
+    dmx = nvc.PyFFmpegDemuxer(str(video_path))
+    w0 = dmx.Width()
+    h0 = dmx.Height()
+    fps = dmx.Framerate()
+    frame_count = dmx.Numframes()
+    del dmx
 
     # SceneManager.DEFAULT_MIN_WIDTH = 256
     TARGET_MIN_WIDTH = 256
@@ -190,15 +379,6 @@ def detect_video_scenes_gpu(video_path: Path, threshold: float = 27.0) -> List[T
     w_eff = max(1, w_eff)
     h_eff = max(1, h_eff)
 
-    # 2) Open reader at effective size. Prefer GPU context like SceneDetect's downscale.
-    ctx = gpu(0) if torch.cuda.is_available() else cpu(0)
-    try:
-        vr = VideoReader(str(video_path), ctx=ctx, width=w_eff, height=h_eff)
-    except Exception as e:
-        logging.warning(f"VideoReader GPU open failed: {e}. Falling back to CPU.")
-        vr = VideoReader(str(video_path), ctx=cpu(0), width=w_eff, height=h_eff)
-
-    frame_count = len(vr)
     if frame_count == 0 or fps <= 0.0:
         return []
 
@@ -255,59 +435,50 @@ def detect_video_scenes_gpu(video_path: Path, threshold: float = 27.0) -> List[T
     last_hsv: Optional[Tuple[np.ndarray, np.ndarray, np.ndarray]] = None
     cut_indices: List[int] = []
 
-    # Helper: ensure ndarray uint8 contiguous for cv2
-    def _to_bgr_uint8_cpu(frames_tensor: torch.Tensor) -> List[np.ndarray]:
-        # decord produces RGB order; convert to BGR for OpenCV
-        frames_cpu = frames_tensor.detach().to('cpu').numpy()
-        # frames_cpu: (B,H,W,3), uint8
-        # Convert RGB -> BGR by reversing last axis
-        frames_bgr = frames_cpu[..., ::-1]
-        # Ensure contiguous arrays per frame for cv2
-        return [np.ascontiguousarray(frames_bgr[i]) for i in range(frames_bgr.shape[0])]
+    with GPUVideoStreamer(
+        video_path, 
+        target_width=w_eff, 
+        target_height=h_eff, 
+        pix_fmt=nvc.PixelFormat.BGR
+    ) as streamer:
+        for frames_bgr, batch_indices in streamer.stream_batches(batch_size=batch_size):
+            frames_cpu = frames_bgr.cpu().numpy()
 
-    for i in range(0, frame_count, batch_size):
-        end_idx = min(i + batch_size, frame_count)
-        frames_t = vr.get_batch(range(i, end_idx))  # torch Tensor (on GPU if ctx=gpu)
-        # Convert to CPU BGR uint8 numpy arrays
-        frames_bgr_list = _to_bgr_uint8_cpu(frames_t)
+            # Process each frame sequentially to exactly match CPU semantics
+            for j, bgr in enumerate(frames_cpu):
+                frame_num = batch_indices[j]
+                bgr = np.ascontiguousarray(bgr)
 
-        # Process each frame sequentially to exactly match CPU semantics
-        for j, bgr in enumerate(frames_bgr_list):
-            frame_num = i + j
-            # OpenCV HSV conversion (exact semantics/hue range)
-            hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
-            hue, sat, val = cv2.split(hsv)
+                # OpenCV HSV conversion (exact semantics/hue range)
+                hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
+                hue, sat, val = cv2.split(hsv)
 
-            if last_hsv is None:
+                if last_hsv is None:
+                    last_hsv = (hue, sat, val)
+                    # First score is 0.0 by design
+                    above = False
+                    # Prime flash filter state
+                    flash_filter.filter(frame_num, above_threshold=above)
+                    continue
+
+                hue_prev, sat_prev, val_prev = last_hsv
+                # Mean pixel distance per channel (match _mean_pixel_distance)
+                # cast to int32 to avoid uint8 underflow
+                dh = np.abs(hue.astype(np.int32) - hue_prev.astype(np.int32)).sum() / float(hue.size)
+                ds = np.abs(sat.astype(np.int32) - sat_prev.astype(np.int32)).sum() / float(sat.size)
+                dv = np.abs(val.astype(np.int32) - val_prev.astype(np.int32)).sum() / float(val.size)
+                frame_score = (dh + ds + dv) / 3.0
+
+                # Record and advance last_hsv
                 last_hsv = (hue, sat, val)
-                # First score is 0.0 by design
-                above = False
-                # Prime flash filter state
-                flash_filter.filter(frame_num, above_threshold=above)
-                continue
 
-            hue_prev, sat_prev, val_prev = last_hsv
-            # Mean pixel distance per channel (match _mean_pixel_distance)
-            # cast to int32 to avoid uint8 underflow
-            dh = np.abs(hue.astype(np.int32) - hue_prev.astype(np.int32)).sum() / float(hue.size)
-            ds = np.abs(sat.astype(np.int32) - sat_prev.astype(np.int32)).sum() / float(sat.size)
-            dv = np.abs(val.astype(np.int32) - val_prev.astype(np.int32)).sum() / float(val.size)
-            frame_score = (dh + ds + dv) / 3.0
+                # Compare against threshold exactly like ContentDetector
+                above = frame_score >= threshold
+                emitted = flash_filter.filter(frame_num=frame_num, above_threshold=above)
+                if emitted:
+                    cut_indices.extend(emitted)
 
-            # Record and advance last_hsv
-            last_hsv = (hue, sat, val)
-
-            # Compare against threshold exactly like ContentDetector
-            above = frame_score >= threshold
-            emitted = flash_filter.filter(frame_num=frame_num, above_threshold=above)
-            if emitted:
-                cut_indices.extend(emitted)
-
-        # release batch tensors ASAP
-        del frames_t, frames_bgr_list
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-        pbar.update(1)
+            pbar.update(1)
 
     pbar.close()
 
@@ -579,137 +750,69 @@ def compute_video_action_profile(
     allows configuring DECORD_EOF_RETRY_MAX via environment.
     """
 
-    # Ensure a sufficiently high EOF retry limit before creating any VideoReader.
+    # 1) Get metadata and calculate dimensions
     try:
-        max_retry = _get_env_int('DECORD_EOF_RETRY_MAX', 65536)
-        os.environ['DECORD_EOF_RETRY_MAX'] = str(max_retry)
-    except Exception:
-        pass
-    skip_tail = _get_env_int('DECORD_SKIP_TAIL_FRAMES', 0)
-
-    ctx = gpu(0) if torch.cuda.is_available() else cpu(0)
-
-    try:
-        # First, read metadata on CPU to determine size without loading to GPU
-        vr_cpu = VideoReader(str(video_path), ctx=cpu(0))
-        h, w, _ = vr_cpu[0].shape
-        orig_fps_probe = float(vr_cpu.get_avg_fps())
-        del vr_cpu
-
-        # Calculate new dimensions
-        w_new = max(1, w // downscale_factor)
-        h_new = max(1, h // downscale_factor)
-
-        # Load directly to GPU with resize
-        vr = VideoReader(str(video_path), ctx=ctx, width=w_new, height=h_new)
+        dmx = nvc.PyFFmpegDemuxer(str(video_path))
+        orig_fps = float(dmx.Framerate())
+        w_new = max(1, dmx.Width() // downscale_factor)
+        h_new = max(1, dmx.Height() // downscale_factor)
+        del dmx
     except Exception:
         logging.warning("Failed to load video for action profile.", exc_info=True)
         return np.array([]), np.array([])
 
-    # duration = len(vr) / vr.get_avg_fps()
-    orig_fps = float(vr.get_avg_fps()) if hasattr(vr, 'get_avg_fps') else orig_fps_probe
-    eff_fps = min(float(fps), float(orig_fps))
+    eff_fps = min(float(fps), orig_fps)
     if eff_fps <= 0:
         eff_fps = max(1.0, float(fps))
 
-    # Calculate indices to sample
+    # Calculate step for subsampling
     step = max(1, int(orig_fps / eff_fps))
-    end_index_exclusive = len(vr) - max(0, int(skip_tail))
-    if end_index_exclusive < 0:
-        end_index_exclusive = 0
-    # indices = list(range(0, end_index_exclusive, step)) # Unused in sequential mode
 
     motions = []
     times = []
-
-    # Use strict sequential reading to avoid seeking hangs, same as detect_video_scenes_gpu
-    batch_size = 16 
-    total_frames = end_index_exclusive
-    
-    # We will iterate ALL frames sequentially, but only process the ones matching 'step'
-    total_batches = (total_frames + batch_size - 1) // batch_size
-    pbar = tqdm(total=total_batches, desc="Video action", unit="batch")
-    
     prev_batch_last = None
 
-    for start_idx in range(0, total_frames, batch_size):
-        end_idx = min(start_idx + batch_size, total_frames)
-        batch_range = range(start_idx, end_idx)
+    with GPUVideoStreamer(video_path, target_width=w_new, target_height=h_new) as streamer:
+        total_batches = int(np.ceil(streamer.total_frames / (step * 16)))
+        pbar = tqdm(total=total_batches, desc="Video Action Profile", unit="batch")
         
-        # Read ALL frames in this range strictly sequentially
-        try:
-            frames = vr.get_batch(batch_range)
-        except Exception as e:
-            logging.warning(f"Error reading batch {batch_range}: {e}. Skipping.")
+        # GPUVideoStreamer natively handles iterating to the end without hanging
+        # and outputs only the batches representing the requested `step`
+        for frames_subset, global_indices in streamer.stream_batches(batch_size=16, step=step):
+            frames_subset = frames_subset.float()
+            
+            # Grayscale conversion on GPU
+            gray = (frames_subset[..., 0] * 0.299 +
+                    frames_subset[..., 1] * 0.587 +
+                    frames_subset[..., 2] * 0.114)
+
+            # Diff computation
+            if prev_batch_last is not None:
+                combined = torch.cat([prev_batch_last.unsqueeze(0), gray])
+                diffs = torch.abs(combined[1:] - combined[:-1])
+            else:
+                combined = torch.cat([gray[0:1], gray])
+                diffs = torch.abs(combined[1:] - combined[:-1])
+                diffs[0] = 0.0
+
+            # Mean diff per frame
+            batch_motions = diffs.mean(dim=(1, 2))
+            motions.append(batch_motions)
+
+            # Timestamps
+            batch_times = torch.tensor(global_indices, device=gray.device).float() / orig_fps
+            times.append(batch_times)
+
+            # Update last processed frame for next continuity
+            prev_batch_last = gray[-1]
+
+            del frames_subset, gray, diffs
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            
             pbar.update(1)
-            continue
-
-        # Now subselect frames that match our step
-        # indices to keep relative to the batch start
-        # Global index i corresponds to batch_range[k]
-        # We want i such that i % step == 0
         
-        # global indices: list(batch_range)
-        # local indices: k
-        
-        # Filter in memory
-        kept_local_indices = []
-        kept_global_indices = []
-        
-        for k, global_idx in enumerate(batch_range):
-            if global_idx % step == 0:
-                kept_local_indices.append(k)
-                kept_global_indices.append(global_idx)
-                
-        if not kept_local_indices:
-            # We decoded this batch but don't need any frames from it for the score. 
-            # We still needed to read it to maintain sequential stream for GPU.
-            # Just update prev_batch_last if needed to maintain continuity or just skip?
-            # For differencing, we need the "previous sampled frame". 
-            # If we skip whole batches, we might lose continuity of "prev_batch_last".
-            # BUT: prev_batch_last should be the last *sampled* frame.
-            del frames
-            pbar.update(1)
-            continue
-
-        # Subselect
-        frames_subset = frames[kept_local_indices].float()
-        
-        # Grayscale
-        gray = (frames_subset[..., 0] * 0.299 +
-                frames_subset[..., 1] * 0.587 +
-                frames_subset[..., 2] * 0.114)
-
-        # Diff
-        # We need to diff against the *last sampled frame*.
-        # If this is the start of the process, diff against self[0].
-        # If we have a prev_batch_last, diff[0] = gray[0] - prev_batch_last
-        
-        if prev_batch_last is not None:
-            # Prepend the last sampled frame to compute diffs
-            combined = torch.cat([prev_batch_last.unsqueeze(0), gray])
-            diffs = torch.abs(combined[1:] - combined[:-1])
-        else:
-            # Very first batch
-            combined = torch.cat([gray[0:1], gray])
-            diffs = torch.abs(combined[1:] - combined[:-1])
-            diffs[0] = 0.0
-
-        # Mean diff per frame
-        batch_motions = diffs.mean(dim=(1, 2))
-        motions.append(batch_motions)
-
-        # Timestamps
-        batch_times = torch.tensor(kept_global_indices, device=gray.device).float() / orig_fps
-        times.append(batch_times)
-
-        # Update last processed frame for next continuity
-        prev_batch_last = gray[-1]
-
-        del frames, frames_subset, gray, diffs
-        pbar.update(1)
-
-    pbar.close()
+        pbar.close()
 
     if len(motions) == 0:
         return np.array([]), np.array([])
@@ -912,14 +1015,10 @@ def get_render_params(
 ) -> RenderParams:
     """Calculate all parameters needed for rendering the final clip."""
 
-    # Use decord CPU to get dimensions quickly
-    try:
-        vr = VideoReader(str(video_path), ctx=cpu(0))
-        h, w, _ = vr[0].shape
-    except Exception:
-        # Fallback to GPU context if CPU fails (unlikely)
-        vr = VideoReader(str(video_path))
-        h, w, _ = vr[0].shape
+    # Use PyFFmpegDemuxer to get dimensions quickly
+    dmx = nvc.PyFFmpegDemuxer(str(video_path))
+    w = dmx.Width()
+    h = dmx.Height()
 
     # Calculate crop parameters (same logic as before: crop to target ratio)
     current_ratio = w / h
@@ -989,14 +1088,27 @@ def render_video_gpu(
 
     logging.info(f"Rendering GPU: {output_path.name}")
 
-    # 1. Extract audio
+    # 1. Fast Extract Segment
+    src_path = Path(params.source_path)
+    temp_cut = output_path.with_suffix(f".temp{src_path.suffix}")
     temp_audio = output_path.with_suffix(".aac")
-    cmd_audio = [
-        "ffmpeg", "-y",
+
+    cmd_cut = [
+        "/usr/bin/ffmpeg", "-y",
         "-ss", f"{params.start_time:.3f}",
-        "-t", f"{params.duration:.3f}",
         "-i", str(params.source_path),
-        "-vn", "-acodec", "copy",
+        "-t", f"{params.duration:.3f}",
+        "-c", "copy",
+        "-map", "0",
+        str(temp_cut)
+    ]
+    subprocess.run(cmd_cut, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+
+    cmd_audio = [
+        "/usr/bin/ffmpeg", "-y",
+        "-i", str(temp_cut),
+        "-q:a", "0",
+        "-map", "a?",
         str(temp_audio)
     ]
     subprocess.run(cmd_audio, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
@@ -1004,15 +1116,15 @@ def render_video_gpu(
     # 2. Setup FFMPEG process
     fps = 30.0
     try:
-        vr_probe = VideoReader(str(params.source_path), ctx=cpu(0))
-        src_fps = vr_probe.get_avg_fps()
+        dmx = nvc.PyFFmpegDemuxer(str(params.source_path))
+        src_fps = float(dmx.Framerate())
         fps = min(src_fps, 60.0)
-        del vr_probe  # Clean up immediately
+        del dmx
     except Exception:
         fps = 30.0
 
     cmd_ffmpeg = [
-        "ffmpeg", "-y",
+        "/usr/bin/ffmpeg", "-y",
         "-f", "rawvideo",
         "-vcodec", "rawvideo",
         "-s", f"{params.output_width}x{params.output_height}",
@@ -1028,8 +1140,7 @@ def render_video_gpu(
 
     cmd_ffmpeg.extend([
         "-c:v", "hevc_nvenc",  # Use hardware encoder
-        "-preset", "p7",
-        "-tune", "hq",
+        "-preset", "slow",     # 'slow' is compatible with old and new ffmpeg NVENC
         "-rc", "vbr",
         "-cq", "23",  # Slightly increased CQ to reduce bitrate spikes
         "-maxrate", "80M",  # Cap bitrate to prevent buffer bloat
@@ -1063,17 +1174,14 @@ def render_video_gpu(
     # Use torch.no_grad() to prevent graph building overhead
     with torch.no_grad():
         try:
-            ctx = gpu(0) if torch.cuda.is_available() else cpu(0)
-
-            # Calculation of dims (omitted full recalc for brevity, logic stays same)
             fg_w = params.output_width
             fg_h = int(params.crop_h * (params.output_width / params.crop_w))
 
-            # ... [Background dims logic from original script stays here] ...
-            # Re-implementing simplified BG logic for context:
-            vr_temp = VideoReader(str(params.source_path), ctx=cpu(0))
-            src_h, src_w, _ = vr_temp[0].shape
-            del vr_temp  # Important: delete CPU reader immediately
+            dmx = nvc.PyFFmpegDemuxer(str(temp_cut))
+            src_h = dmx.Height()
+            src_w = dmx.Width()
+            src_fps_val = float(dmx.Framerate())
+            del dmx
 
             if params.is_vertical_bg:
                 bg_ratio_w, bg_ratio_h = 9, 16
@@ -1087,40 +1195,24 @@ def render_video_gpu(
                 bg_crop_w, bg_crop_h = bg_dim, bg_dim
                 bg_crop_x, bg_crop_y = int(src_w * 0.5 - bg_crop_w / 2), int(src_h * 0.5 - bg_crop_h / 2)
 
-            # Main Reader - Created ONCE. Do not recreate in loop.
-            vr = VideoReader(str(params.source_path), ctx=ctx)
-
             total_frames = int(params.duration * fps)
-            src_fps_val = vr.get_avg_fps()
-
-            # Pre-calculate indices to avoid math in loop
-            frame_indices = [int((params.start_time + (i / fps)) * src_fps_val) for i in range(total_frames)]
 
             BATCH_SIZE = 4
-            total_batches = (len(frame_indices) + BATCH_SIZE - 1) // BATCH_SIZE
+            total_batches = (total_frames + BATCH_SIZE - 1) // BATCH_SIZE
 
             log_memory_usage("Render Start")
 
-            with tqdm(total=total_batches, desc="Video render", unit="batch") as pbar_render:
-                for i in range(0, len(frame_indices), BATCH_SIZE):
-                    if i % (BATCH_SIZE * 50) == 0:
-                        logging.info(f"Rendering batch {i // BATCH_SIZE}/{total_batches}")
-
-                    # REMOVED: The block causing the leak (del vr / new vr)
+            with tqdm(total=total_batches, desc="Video render", unit="batch") as pbar_render, \
+                 GPUVideoStreamer(temp_cut, seek_time=0.0) as streamer:
+                 
+                batch_count = 0
+                for frames, _ in streamer.stream_batches(batch_size=BATCH_SIZE, max_frames=total_frames):
+                    if batch_count % 50 == 0:
+                        logging.info(f"Rendering batch {batch_count}/{total_batches}")
+                    batch_count += 1
 
                     if process.poll() is not None:
                         logging.error("FFMPEG died")
-                        break
-
-                    batch_idxs = frame_indices[i: i + BATCH_SIZE]
-                    # Clamp indices
-                    max_idx = len(vr) - 1
-                    batch_idxs = [min(x, max_idx) for x in batch_idxs]
-
-                    try:
-                        frames = vr.get_batch(batch_idxs)  # (B, H, W, 3)
-                    except Exception as e:
-                        logging.warning(f"Batch read failed: {e}")
                         break
 
                     # 1. Background Processing
@@ -1181,7 +1273,7 @@ def render_video_gpu(
                     del frames, bg_frames, bg_small, blurred_bg, final_bg, fg_frames, final_fg, out_tensor, out_bytes, cp_bg, blurred_bg_cp
 
                     # Periodic GC - keep it, but less frequent is fine
-                    if i > 0 and (i // BATCH_SIZE) % 100 == 0:
+                    if batch_count > 0 and batch_count % 100 == 0:
                         gc.collect()
 
                     pbar_render.update(1)
@@ -1202,10 +1294,10 @@ def render_video_gpu(
 
             if temp_audio.exists():
                 temp_audio.unlink()
+            if 'temp_cut' in locals() and temp_cut.exists():
+                temp_cut.unlink()
 
             # Final memory sweep
-            if 'vr' in locals():
-                del vr
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
                 torch.cuda.ipc_collect()
@@ -1403,15 +1495,12 @@ def process_video(video_file: Path, config: ProcessingConfig, output_dir: Path) 
 
     # Pre-calculate video duration for boundary checks
     try:
-        vr_probe = VideoReader(str(video_file), ctx=cpu(0))
-        video_duration = len(vr_probe) / vr_probe.get_avg_fps()
-        del vr_probe
+        dmx = nvc.PyFFmpegDemuxer(str(video_file))
+        video_duration = float(dmx.Numframes() / dmx.Framerate())
+        del dmx
     except Exception:
-        logging.warning("Decord probe failed, using MoviePy to check duration.")
-        from moviepy import VideoFileClip
-        video_clip = VideoFileClip(str(video_file))
-        video_duration = video_clip.duration
-        video_clip.close()
+        logging.warning("PyNvCodec probe failed, fallback to 0 duration.")
+        video_duration = 0.0
 
     processed_scene_list = combine_scenes(scene_list, config)
     processed_scene_list = split_overlong_scenes(processed_scene_list, config)

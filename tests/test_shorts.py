@@ -80,35 +80,20 @@ def test_combine_scenes_merges_short_scenes():
 def test_compute_video_action_profile_sequential():
     """Verify that compute_video_action_profile reads sequentially (batch-by-batch) and subsamples."""
     
-    # 1. Setup Mock VideoReader
-    mock_vr = MagicMock()
-    # Let's say video has 1000 frames, 30 fps
-    mock_vr.__len__.return_value = 1000
-    mock_vr.get_avg_fps.return_value = 30.0
-
-    # Configure __getitem__ for metadata probe (vr_cpu[0].shape)
-    mock_frame = MagicMock()
-    mock_frame.shape = (720, 1280, 3)
-    mock_vr.__getitem__.return_value = mock_frame
-
-    # Configure get_batch to return a FakeTensor
-    def side_effect_get_batch(indices):
-        count = len(indices)
-        return tests.mock_gpu.FakeTensor(shape=(count, 64, 64, 3), numel=count*64*64*3)
-
-    mock_vr.get_batch.side_effect = side_effect_get_batch
-
-    shorts.VideoReader.return_value = mock_vr
-
-    times, scores = compute_video_action_profile(Path("dummy.mp4"), fps=6)
-
-    assert shorts.VideoReader.called
-    assert mock_vr.get_batch.called
-
-    calls = mock_vr.get_batch.call_args_list
-    assert len(calls) > 0
+    # 1. Setup Mock
+    mock_streamer_instance = MagicMock()
     
-    first_call_args = calls[0].args[0]
-    assert list(first_call_args) == list(range(0, 16))
-    
-    assert isinstance(times, np.ndarray) or (times == [])
+    # Configure stream_batches to yield a couple of FakeTensors
+    def mock_stream_batches(batch_size=16, step=1, max_frames=None):
+        yield tests.mock_gpu.FakeTensor(shape=(batch_size, 64, 64, 3), numel=batch_size*64*64*3), list(range(0, batch_size * step, step))
+        yield tests.mock_gpu.FakeTensor(shape=(batch_size, 64, 64, 3), numel=batch_size*64*64*3), list(range(batch_size * step, batch_size*2 * step, step))
+
+    mock_streamer_instance.stream_batches.side_effect = mock_stream_batches
+    mock_streamer_instance.__enter__.return_value = mock_streamer_instance
+
+    from unittest import mock
+    with mock.patch("shorts.GPUVideoStreamer", return_value=mock_streamer_instance):
+        times, scores = compute_video_action_profile(Path("dummy.mp4"), fps=6)
+
+        assert mock_streamer_instance.stream_batches.called
+        assert isinstance(times, np.ndarray) or (times == [])

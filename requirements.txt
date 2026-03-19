@@ -7,5 +7,3 @@ pytest-cov==6.0.0
 pytest-mock==3.14.0
 python-dotenv==1.2.1
 tqdm
-# decord removed - install manually
-# torch/torchaudio removed - they are built into the image

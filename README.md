@@ -18,9 +18,10 @@ For the original CPU-only version, please visit [Shorts Maker](https://github.co
 ## Features
 
 - **GPU-Accelerated Processing**:
-  - **Scene Detection**: Custom implementation using `decord` and PyTorch on GPU.
+  - **Hardware Decoding & Resizing**: Native NVIDIA Video Processing Framework (VPF) integration via `PyNvCodec`. Decodes, resizes, and converts color spaces directly on NVDEC.
+  - **Scene Detection**: Custom implementation using VPF and OpenCV.
   - **Audio Analysis**: Uses `torchaudio` on GPU for fast RMS and spectral flux calculation.
-  - **Video Analysis**: Sequential high-speed GPU streaming via `decord` for stable motion estimation (replaces random access).
+  - **Video Analysis**: Zero-copy GPU memory streaming for stable motion estimation (replaces heavy frame indices).
   - **Image Processing**: `cupy` (CUDA-accelerated NumPy) used for heavy operations like blurring backgrounds.
   - **Rendering**: Custom PyTorch+NVENC engine for high-performance rendering (MoviePy removed from render path).
 - Audio + video action scoring:
@@ -45,7 +46,7 @@ For the original CPU-only version, please visit [Shorts Maker](https://github.co
 Python dependencies (see `requirements.txt`):
 - `torch`, `torchaudio` (with CUDA support)
 - `cupy-cuda12x`
-- `decord`
+- `PyNvCodec`, `PytorchNvCodec` (Video Processing Framework)
 - `moviepy`
 
 ## Installation
@@ -115,8 +116,6 @@ Supported variables (defaults shown):
 - `MIN_SHORT_LENGTH=15` — Minimum short length in seconds.
 - `MAX_SHORT_LENGTH=179` — Maximum short length in seconds.
 - `MAX_COMBINED_SCENE_LENGTH=300` — Maximum combined length (in seconds).
-- `DECORD_EOF_RETRY_MAX=65536` — Decord EOF retry attempts.
-- `DECORD_SKIP_TAIL_FRAMES=0` — Frames to skip at end of video to avoid EOF hangs (try 180-300 if hanging).
 
 ## Development
 

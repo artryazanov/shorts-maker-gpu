@@ -11,21 +11,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     cmake \
     pkg-config \
     wget \
+    ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# 2. FIX: Install FFmpeg 4.4.2
-# This is the latest version with which Decord reliably compiles without errors
-RUN conda update -n base -c defaults conda -y && \
-    conda install -y -c conda-forge "ffmpeg=4.4.2"
+# 2. Update Conda and install recent FFmpeg
+RUN conda clean -i && conda install -y -c conda-forge ffmpeg
 
 # 3. Set up environment
 ENV FFMPEG_BINARY=/opt/conda/bin/ffmpeg
-ENV LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:/usr/local/cuda/lib64:$LD_LIBRARY_PATH
-# Increase Decord EOF retry limit to better handle long 4K videos with slow tail retrieval
-ENV DECORD_EOF_RETRY_MAX=65536
-ENV DECORD_SKIP_TAIL_FRAMES=0
+ENV PKG_CONFIG_PATH=/opt/conda/lib/pkgconfig
+ENV LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:/usr/local/cuda/lib64:/opt/conda/lib:$LD_LIBRARY_PATH
 
 # Ensure NVIDIA driver capabilities include video for codecs
 ENV NVIDIA_DRIVER_CAPABILITIES=all
@@ -51,18 +48,28 @@ RUN ln -sf /usr/lib/x86_64-linux-gnu/libnvcuvid.so.1 /usr/lib/x86_64-linux-gnu/l
 
 # 6. Install Python dependencies
 COPY requirements.txt requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --upgrade pip "setuptools<70.0.0" wheel scikit-build ninja && \
+    pip install --no-cache-dir -r requirements.txt
 
-# 7. Build Decord
-RUN git clone --recursive https://github.com/dmlc/decord && \
-    cd decord && \
+# 7. Build VideoProcessingFramework (PyNvCodec)
+# Required for modern hardware-accelerated video decoding.
+# Set paths to FFMPEG since we installed it via conda.
+RUN git clone https://github.com/NVIDIA/VideoProcessingFramework.git && \
+    cd VideoProcessingFramework && \
     mkdir build && cd build && \
-    cmake .. -DUSE_CUDA=ON -DCMAKE_BUILD_TYPE=Release \
-    -DCUDA_nvcuvid_LIBRARY=/usr/lib/x86_64-linux-gnu/libnvcuvid.so && \
+    cmake .. \
+      -DFFMPEG_DIR:PATH="/opt/conda" \
+      -DVIDEO_CODEC_SDK_DIR:PATH="/app/nv-codec-headers" \
+      -DGENERATE_PYTHON_BINDINGS:BOOL="1" \
+      -DPYTHON_LIBRARY=/opt/conda/lib/libpython3.10.so \
+      -DPYTHON_INCLUDE_DIR=/opt/conda/include/python3.10 \
+      -DCMAKE_INSTALL_PREFIX:PATH="/usr/local" && \
     make -j$(nproc) && \
-    cd ../python && \
-    python setup.py install && \
-    cd /app && rm -rf decord
+    make install && \
+    cd .. && \
+    pip install . --no-build-isolation && \
+    pip install src/PytorchNvCodec --no-build-isolation && \
+    cd /app && rm -rf VideoProcessingFramework
 
 # 8. C++ library fix
 RUN rm /opt/conda/lib/libstdc++.so.6 && \

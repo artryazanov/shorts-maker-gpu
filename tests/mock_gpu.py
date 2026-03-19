@@ -25,6 +25,9 @@ class FakeTensor:
     def numel(self):
         return self._numel
 
+    def dim(self):
+        return len(self._shape) if self._shape else 0
+
     def squeeze(self, *args, **kwargs):
         if len(self._shape) > 1 and self._shape[0] == 1:
             return FakeTensor(shape=self._shape[1:], numel=self._numel)
@@ -60,6 +63,7 @@ class FakeTensor:
         
     def contiguous(self): return self
     def byte(self): return self
+    def clone(self): return self
     
     def numpy(self):
         import numpy as np
@@ -108,6 +112,7 @@ def setup_mocks():
     torch_mock.zeros = lambda x, **kwargs: FakeTensor(shape=x if isinstance(x, tuple) else (x,))
     torch_mock.cat = lambda x, **kwargs: FakeTensor(shape=x[0].shape if hasattr(x[0], 'shape') else (100,)) if isinstance(x, (list, tuple)) and len(x) > 0 else FakeTensor()
     torch_mock.ones = lambda x, **kwargs: FakeTensor(shape=(x,) if isinstance(x, int) else x)
+    torch_mock.stack = lambda x, **kwargs: FakeTensor(shape=(len(x),) + x[0].shape if len(x)>0 and hasattr(x[0], 'shape') else (100,))
     torch_mock.arange = lambda x, **kwargs: FakeTensor(shape=(x,) if isinstance(x, int) else x)
     torch_mock.hann_window = lambda x, **kwargs: FakeTensor(shape=(x,) if isinstance(x, int) else x)
     torch_mock.stft = lambda x, **kwargs: FakeTensor(shape=(1025, 100))
@@ -132,13 +137,36 @@ def setup_mocks():
     torchaudio_mock.load = mock.MagicMock()
     sys.modules["torchaudio"] = torchaudio_mock
 
-    decord_mock = create_mock_module("decord")
-    decord_mock.bridge = create_mock_module("decord.bridge")
-    decord_mock.bridge.set_bridge = mock.MagicMock()
-    decord_mock.cpu = lambda x: f"cpu({x})"
-    decord_mock.gpu = lambda x: f"gpu({x})"
-    decord_mock.VideoReader = mock.MagicMock()
-    sys.modules["decord"] = decord_mock
+    nvc_mock = create_mock_module("PyNvCodec")
+    nvc_mock.PixelFormat = create_mock_module("PyNvCodec.PixelFormat")
+    nvc_mock.PixelFormat.RGB = "RGB"
+    nvc_mock.PixelFormat.BGR = "BGR"
+    nvc_mock.SeekMode = create_mock_module("PyNvCodec.SeekMode")
+    nvc_mock.SeekMode.PREV_KEY_FRAME = "PREV_KEY_FRAME"
+    
+    class MockDemuxer:
+        def __init__(self, *args, **kwargs): pass
+        def Width(self): return 1280
+        def Height(self): return 720
+        def Framerate(self): return 30.0
+        def Numframes(self): return 1000
+        def Format(self): return "nv12"
+        def Codec(self): return "h264"
+        def DemuxSinglePacket(self, packet): return False
+        def Seek(self, *args, **kwargs): pass
+    nvc_mock.PyFFmpegDemuxer = MockDemuxer
+
+    nvc_mock.PyNvDecoder = mock.MagicMock()
+    nvc_mock.PySurfaceResizer = mock.MagicMock()
+    nvc_mock.PySurfaceConverter = mock.MagicMock()
+    
+    nvc_mock.Surface = create_mock_module("PyNvCodec.Surface")
+    nvc_mock.Surface.Make = mock.MagicMock()
+    sys.modules["PyNvCodec"] = nvc_mock
+    
+    pnvc_mock = create_mock_module("PytorchNvCodec")
+    pnvc_mock.make_tensor = mock.MagicMock(return_value=FakeTensor(shape=(3, 720, 1280), numel=3*720*1280))
+    sys.modules["PytorchNvCodec"] = pnvc_mock
 
     cupy_mock = create_mock_module("cupy")
     cupy_mock.asarray = mock.MagicMock(side_effect=lambda x: x)

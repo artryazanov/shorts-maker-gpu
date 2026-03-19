@@ -63,11 +63,11 @@ def test_process_video(mock_get_params, mock_render, mock_video_action, mock_aud
     dummy_vid.touch() # Create dummy file
     
     # Mock video probe
-    with mock.patch("shorts.VideoReader") as mock_vr:
-        mock_vr_instance = mock.MagicMock()
-        mock_vr_instance.__len__.return_value = 150
-        mock_vr_instance.get_avg_fps.return_value = 30.0
-        mock_vr.return_value = mock_vr_instance
+    with mock.patch("shorts.nvc.PyFFmpegDemuxer") as mock_dmx:
+        mock_dmx_instance = mock.MagicMock()
+        mock_dmx_instance.Numframes.return_value = 150
+        mock_dmx_instance.Framerate.return_value = 30.0
+        mock_dmx.return_value = mock_dmx_instance
         
         shorts.process_video(dummy_vid, config, tmp_path)
         
@@ -86,12 +86,12 @@ def test_process_video_no_scenes(mock_get_params, mock_render, tmp_path):
     with mock.patch("shorts.detect_video_scenes_gpu", return_value=[]), \
          mock.patch("shorts.compute_audio_action_profile", return_value=(np.array([]), np.array([]))), \
          mock.patch("shorts.compute_video_action_profile", return_value=(np.array([]), np.array([]))), \
-         mock.patch("shorts.VideoReader") as mock_vr:
+         mock.patch("shorts.nvc.PyFFmpegDemuxer") as mock_dmx:
         
-        mock_vr_instance = mock.MagicMock()
-        mock_vr_instance.__len__.return_value = 3000
-        mock_vr_instance.get_avg_fps.return_value = 30.0
-        mock_vr.return_value = mock_vr_instance
+        mock_dmx_instance = mock.MagicMock()
+        mock_dmx_instance.Numframes.return_value = 3000
+        mock_dmx_instance.Framerate.return_value = 30.0
+        mock_dmx.return_value = mock_dmx_instance
         
         shorts.process_video(dummy_vid, config, tmp_path)
     
