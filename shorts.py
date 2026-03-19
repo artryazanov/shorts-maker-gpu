@@ -108,14 +108,23 @@ class GPUVideoStreamer:
             target_frame_idx = int(seek_time * self.fps)
             self.start_frame = target_frame_idx
             
-            current_frame_idx = -1
+            try:
+                pkt_data = nvc.PacketData()
+                timebase = self.nv_dmx.Timebase()
+            except Exception:
+                pkt_data = None
+                timebase = 1.0
+            
             while True:
                 if not self.nv_dmx.DemuxSinglePacket(packet):
                     break
-                # Update current time based on Demuxer's LastPacketTimestamp
-                # but an easier way is just counting if we assume sequential decoding,
-                # though Demuxer provides exact timestamp info. For simplicity we decode
-                # up to start_frame.
+                
+                if pkt_data is not None:
+                    self.nv_dmx.LastPacketData(pkt_data)
+                    current_time = pkt_data.pts * timebase
+                else:
+                    current_time = seek_time # Fallback to no skipping if API is missing
+                    
                 try:
                     surf = self.nv_dec.DecodeSurfaceFromPacket(packet)
                     if isinstance(surf, bool):
@@ -127,10 +136,8 @@ class GPUVideoStreamer:
                 except TypeError:
                     success = self.nv_dec.DecodeSurfaceFromPacket(packet, self.dec_surface)
                     
-                if success:
-                    current_frame_idx += 1
-                    if current_frame_idx >= self.start_frame - 1:
-                        break
+                if success and current_time >= seek_time:
+                    break
 
     def __enter__(self):
         return self
@@ -206,23 +213,17 @@ class GPUVideoStreamer:
                         cvt_surface = nvc.Surface.Make(self.nv_cvt.Format(), self.target_w, self.target_h, self.gpu_id)
                         self.nv_cvt.Execute(current_surface, cvt_surface)
 
-                if hasattr(pnvc, "make_tensor"):
-                    tensor = pnvc.make_tensor(cvt_surface) 
-                    if tensor.dim() == 4 and tensor.shape[0] == 1:
-                        tensor = tensor.squeeze(0)
-                    tensor = tensor.permute(1, 2, 0).clone() 
-                else:
-                    surf_plane = cvt_surface.PlanePtr()
-                    tensor = pnvc.DptrToTensor(
-                        surf_plane.GpuMem(),
-                        surf_plane.Width(),
-                        surf_plane.Height(),
-                        surf_plane.Pitch(),
-                        surf_plane.ElemSize(),
-                    )
-                    h, w = cvt_surface.Height(), cvt_surface.Width()
-                    tensor.resize_(h, surf_plane.Pitch())
-                    tensor = tensor[:, :w*3].view(h, w, 3).clone()
+                surf_plane = cvt_surface.PlanePtr()
+                tensor = pnvc.DptrToTensor(
+                    surf_plane.GpuMem(),
+                    surf_plane.Width(),
+                    surf_plane.Height(),
+                    surf_plane.Pitch(),
+                    surf_plane.ElemSize(),
+                )
+                h, w = cvt_surface.Height(), cvt_surface.Width()
+                tensor.resize_(h, surf_plane.Pitch())
+                tensor = tensor[:, :w*3].view(h, w, 3).clone()
 
                 batch_frames.append(tensor)
                 batch_indices.append(frame_idx)
@@ -1088,25 +1089,15 @@ def render_video_gpu(
 
     logging.info(f"Rendering GPU: {output_path.name}")
 
-    # 1. Fast Extract Segment
+    # 1. Fast Extract Audio
     src_path = Path(params.source_path)
-    temp_cut = output_path.with_suffix(f".temp{src_path.suffix}")
     temp_audio = output_path.with_suffix(".aac")
 
-    cmd_cut = [
+    cmd_audio = [
         "/usr/bin/ffmpeg", "-y",
         "-ss", f"{params.start_time:.3f}",
         "-i", str(params.source_path),
         "-t", f"{params.duration:.3f}",
-        "-c", "copy",
-        "-map", "0",
-        str(temp_cut)
-    ]
-    subprocess.run(cmd_cut, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
-
-    cmd_audio = [
-        "/usr/bin/ffmpeg", "-y",
-        "-i", str(temp_cut),
         "-q:a", "0",
         "-map", "a?",
         str(temp_audio)
@@ -1177,7 +1168,7 @@ def render_video_gpu(
             fg_w = params.output_width
             fg_h = int(params.crop_h * (params.output_width / params.crop_w))
 
-            dmx = nvc.PyFFmpegDemuxer(str(temp_cut))
+            dmx = nvc.PyFFmpegDemuxer(str(params.source_path))
             src_h = dmx.Height()
             src_w = dmx.Width()
             src_fps_val = float(dmx.Framerate())
@@ -1203,7 +1194,7 @@ def render_video_gpu(
             log_memory_usage("Render Start")
 
             with tqdm(total=total_batches, desc="Video render", unit="batch") as pbar_render, \
-                 GPUVideoStreamer(temp_cut, seek_time=0.0) as streamer:
+                 GPUVideoStreamer(params.source_path, seek_time=params.start_time) as streamer:
                  
                 batch_count = 0
                 for frames, _ in streamer.stream_batches(batch_size=BATCH_SIZE, max_frames=total_frames):
@@ -1228,7 +1219,7 @@ def render_video_gpu(
                     # Blur via Cupy
                     bg_small = bg_small.permute(0, 2, 3, 1).contiguous()  # back to NHWC for cupy
                     cp_bg = cp.from_dlpack(torch.to_dlpack(bg_small))
-                    f_bg = cp_bg.astype(float)
+                    f_bg = cp_bg.astype(cp.float32)
                     blurred_bg_cp = cupyx.scipy.ndimage.gaussian_filter(f_bg, sigma=(0, 16, 16, 0))
                     # Explicit cast back to match original dtype usually helps, but float is fine for interpolate
                     blurred_bg = torch.utils.dlpack.from_dlpack(blurred_bg_cp).float()
@@ -1294,8 +1285,7 @@ def render_video_gpu(
 
             if temp_audio.exists():
                 temp_audio.unlink()
-            if 'temp_cut' in locals() and temp_cut.exists():
-                temp_cut.unlink()
+
 
             # Final memory sweep
             if torch.cuda.is_available():
