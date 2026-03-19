@@ -213,17 +213,35 @@ class GPUVideoStreamer:
                         cvt_surface = nvc.Surface.Make(self.nv_cvt.Format(), self.target_w, self.target_h, self.gpu_id)
                         self.nv_cvt.Execute(current_surface, cvt_surface)
 
-                surf_plane = cvt_surface.PlanePtr()
-                tensor = pnvc.DptrToTensor(
-                    surf_plane.GpuMem(),
-                    surf_plane.Width(),
-                    surf_plane.Height(),
-                    surf_plane.Pitch(),
-                    surf_plane.ElemSize(),
-                )
-                h, w = cvt_surface.Height(), cvt_surface.Width()
-                tensor.resize_(h, surf_plane.Pitch())
-                tensor = tensor[:, :w*3].view(h, w, 3).clone()
+                # --- Smart tensor parsing ---
+                if hasattr(pnvc, "make_tensor"):
+                    tensor = pnvc.make_tensor(cvt_surface)
+                    
+                    # Remove extra batch dimension (N) if present
+                    if tensor.dim() == 4 and tensor.shape[0] == 1:
+                        tensor = tensor.squeeze(0)
+                        
+                    # Strictly normalize shape to (H, W, 3)
+                    if tensor.shape[0] == 3:
+                        # If VPF returned (3, H, W) -> convert to (H, W, 3)
+                        tensor = tensor.permute(1, 2, 0)
+                    elif tensor.shape[-1] != 3:
+                        # For completely exotic bugs
+                        logging.warning(f"Unexpected tensor shape from VPF: {tensor.shape}")
+                        
+                    tensor = tensor.contiguous().clone()
+                else:
+                    # Safe fallback without resize_ (via as_strided)
+                    surf_plane = cvt_surface.PlanePtr()
+                    h, w = cvt_surface.Height(), cvt_surface.Width()
+                    pitch = surf_plane.Pitch()
+                    # Pass `pitch` as the `width` argument (and elem_size=1) so the tensor wraps 
+                    # the fully padded memory region (pitch * h) bytes without reallocation!
+                    tensor_raw = pnvc.DptrToTensor(
+                        surf_plane.GpuMem(), pitch, h, pitch, 1
+                    )
+                    # as_strided safely jumps over padding (Pitch) without distortions!
+                    tensor = tensor_raw.as_strided((h, w, 3), (pitch, 3, 1)).contiguous().clone()
 
                 batch_frames.append(tensor)
                 batch_indices.append(frame_idx)
