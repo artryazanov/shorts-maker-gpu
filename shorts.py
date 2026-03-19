@@ -62,81 +62,85 @@ class GPUVideoStreamer:
         self.fps = self.nv_dmx.Framerate()
         self.total_frames = self.nv_dmx.Numframes()
 
-        self.nv_dec = nvc.PyNvDecoder(
-            self.src_w, self.src_h, 
-            self.nv_dmx.Format(), self.nv_dmx.Codec(), self.gpu_id
-        )
-
-        self.target_w = target_width or self.src_w
-        self.target_h = target_height or self.src_h
-        self.nv_res = None
-        if self.target_w != self.src_w or self.target_h != self.src_h:
-            self.nv_res = nvc.PySurfaceResizer(
-                self.target_w, self.target_h, 
-                self.nv_dmx.Format(), self.gpu_id
+        try:
+            self.nv_dec = nvc.PyNvDecoder(
+                self.src_w, self.src_h, 
+                self.nv_dmx.Format(), self.nv_dmx.Codec(), self.gpu_id
             )
 
-        self.nv_cvt_yuv = None
-        if self.nv_dmx.Format() == nvc.PixelFormat.NV12 and pix_fmt in (nvc.PixelFormat.BGR, nvc.PixelFormat.RGB):
-            self.nv_cvt_yuv = nvc.PySurfaceConverter(
-                self.target_w, self.target_h, 
-                self.nv_dmx.Format(), nvc.PixelFormat.YUV420, self.gpu_id
-            )
-            self.nv_cvt = nvc.PySurfaceConverter(
-                self.target_w, self.target_h, 
-                nvc.PixelFormat.YUV420, pix_fmt, self.gpu_id
-            )
-        else:
-            self.nv_cvt = nvc.PySurfaceConverter(
-                self.target_w, self.target_h, 
-                self.nv_dmx.Format(), pix_fmt, self.gpu_id
-            )
+            self.target_w = target_width or self.src_w
+            self.target_h = target_height or self.src_h
+            self.nv_res = None
+            if self.target_w != self.src_w or self.target_h != self.src_h:
+                self.nv_res = nvc.PySurfaceResizer(
+                    self.target_w, self.target_h, 
+                    self.nv_dmx.Format(), self.gpu_id
+                )
 
-        self.dec_surface = nvc.Surface.Make(self.nv_dmx.Format(), self.src_w, self.src_h, self.gpu_id)
+            self.nv_cvt_yuv = None
+            if self.nv_dmx.Format() == nvc.PixelFormat.NV12 and pix_fmt in (nvc.PixelFormat.BGR, nvc.PixelFormat.RGB):
+                self.nv_cvt_yuv = nvc.PySurfaceConverter(
+                    self.target_w, self.target_h, 
+                    self.nv_dmx.Format(), nvc.PixelFormat.YUV420, self.gpu_id
+                )
+                self.nv_cvt = nvc.PySurfaceConverter(
+                    self.target_w, self.target_h, 
+                    nvc.PixelFormat.YUV420, pix_fmt, self.gpu_id
+                )
+            else:
+                self.nv_cvt = nvc.PySurfaceConverter(
+                    self.target_w, self.target_h, 
+                    self.nv_dmx.Format(), pix_fmt, self.gpu_id
+                )
 
-        self.start_frame = 0
-        if seek_time > 0:
-            packet = np.ndarray(shape=(0,), dtype=np.uint8)
-            try:
-                ctx = nvc.SeekContext(seek_time, nvc.SeekMode.PREV_KEY_FRAME)
-                self.nv_dmx.Seek(ctx, packet)
-            except (TypeError, AttributeError):
-                self.nv_dmx.Seek(seek_time, nvc.SeekMode.PREV_KEY_FRAME)
-                
-            # Seeking in Demuxer seeks to nearest keyframe. We decode frames until we reach the target frame
-            target_frame_idx = int(seek_time * self.fps)
-            self.start_frame = target_frame_idx
-            
-            try:
-                pkt_data = nvc.PacketData()
-                timebase = self.nv_dmx.Timebase()
-            except Exception:
-                pkt_data = None
-                timebase = 1.0
-            
-            while True:
-                if not self.nv_dmx.DemuxSinglePacket(packet):
-                    break
-                
-                if pkt_data is not None:
-                    self.nv_dmx.LastPacketData(pkt_data)
-                    current_time = pkt_data.pts * timebase
-                else:
-                    current_time = seek_time # Fallback to no skipping if API is missing
-                    
+            self.dec_surface = nvc.Surface.Make(self.nv_dmx.Format(), self.src_w, self.src_h, self.gpu_id)
+
+            self.start_frame = 0
+            if seek_time > 0:
+                packet = np.ndarray(shape=(0,), dtype=np.uint8)
                 try:
-                    surf = self.nv_dec.DecodeSurfaceFromPacket(packet)
-                    if isinstance(surf, bool):
-                        success = surf
-                    else:
-                        success = not surf.Empty()
-                        if success:
-                            self.dec_surface = surf
-                except TypeError:
-                    success = self.nv_dec.DecodeSurfaceFromPacket(packet, self.dec_surface)
+                    ctx = nvc.SeekContext(seek_time, nvc.SeekMode.PREV_KEY_FRAME)
+                    self.nv_dmx.Seek(ctx, packet)
+                except (TypeError, AttributeError):
+                    self.nv_dmx.Seek(seek_time, nvc.SeekMode.PREV_KEY_FRAME)
                     
-                if success and current_time >= seek_time:
-                    break
+                # Seeking in Demuxer seeks to nearest keyframe. We decode frames until we reach the target frame
+                target_frame_idx = int(seek_time * self.fps)
+                self.start_frame = target_frame_idx
+                
+                try:
+                    pkt_data = nvc.PacketData()
+                    timebase = self.nv_dmx.Timebase()
+                except Exception:
+                    pkt_data = None
+                    timebase = 1.0
+                
+                while True:
+                    if not self.nv_dmx.DemuxSinglePacket(packet):
+                        break
+                    
+                    if pkt_data is not None:
+                        self.nv_dmx.LastPacketData(pkt_data)
+                        current_time = pkt_data.pts * timebase
+                    else:
+                        current_time = seek_time # Fallback to no skipping if API is missing
+                        
+                    try:
+                        surf = self.nv_dec.DecodeSurfaceFromPacket(packet)
+                        if isinstance(surf, bool):
+                            success = surf
+                        else:
+                            success = not surf.Empty()
+                            if success:
+                                self.dec_surface = surf
+                    except TypeError:
+                        success = self.nv_dec.DecodeSurfaceFromPacket(packet, self.dec_surface)
+                        
+                    if success and current_time >= seek_time:
+                        break
+        except Exception:
+            del self.nv_dmx
+            raise
 
     def __enter__(self):
         return self
@@ -563,6 +567,7 @@ def blur_gpu(image_tensor: torch.Tensor, sigma: float = 8.0) -> torch.Tensor:
 
 # --- Audio-based action scoring (GPU) -------------------------------------------
 
+@torch.no_grad()
 def compute_audio_action_profile(
     video_path: Path,
     frame_length: int = 2048,
@@ -577,162 +582,106 @@ def compute_audio_action_profile(
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
-    # Load audio using torchaudio (remains on CPU initially)
-    # normalize=True loads as float32 in [-1, 1]
-    # We do NOT move the full waveform to GPU.
     try:
-        waveform, sample_rate = torchaudio.load(str(video_path), normalize=True)
+        info = torchaudio.info(str(video_path))
+        sample_rate = info.sample_rate
+        total_samples = info.num_frames
     except Exception:
         logging.error(f"Failed to load audio from {video_path}")
         return np.array([]), np.array([])
     
-    # Mix to mono if necessary (remains on CPU)
-    if waveform.shape[0] > 1:
-        waveform = torch.mean(waveform, dim=0, keepdim=True)
-    
-    # Remove batch dim
-    y_cpu = waveform.squeeze(0)  # Shape: (total_samples,)
-
-    # --- RMS (Loudness) Calculation in Batches ---
-    
-    # Use a sliding window approach with batched chunks to avoid allocating 
-    # the entire unfolded tensor on GPU, which causes OOM on large files.
-    
-    # CHUNK_SIZE = 48000 * 60  # ~1 minute chunks (Unused)
-    total_samples = y_cpu.shape[0]
-    
     rms_values = []
+    flux_values = []
     
-    # Pad the signal if it's shorter than one frame 
-    if total_samples < frame_length:
-        y_cpu = torch.nn.functional.pad(y_cpu, (0, frame_length - total_samples))
-        total_samples = y_cpu.shape[0]
-
-    # Process in chunks ensuring proper window alignment.
-    # Calculate total expected frames based on total samples and hop length.
+    window = torch.hann_window(2048).to(device)
+    last_mag_col = torch.zeros(2048 // 2 + 1, device=device)
     
-    num_frames_total = (total_samples - frame_length) // hop_length + 1
-    if num_frames_total <= 0:
-        num_frames_total = 0
-        
-    # Iterate over OUTPUT frames
-    FRAMES_PER_BATCH = 4096 * 4  # Process ~16k frames at a time
-    
-    pbar_rms = tqdm(total=num_frames_total, desc="Audio RMS", unit="fr")
+    # Process in chunks of 2 minutes to save RAM
+    # Make sure chunk_frames is a multiple of hop_length
+    chunk_frames = (sample_rate * 120 // hop_length) * hop_length
+    # Overlap allows STFT and RMS to be seamless across boundaries
+    overlap_frames = frame_length
     
     current_frame = 0
-    while current_frame < num_frames_total:
-        end_frame = min(current_frame + FRAMES_PER_BATCH, num_frames_total)
-        count = end_frame - current_frame
+    pbar = tqdm(total=total_samples if total_samples > 0 else 1, desc="Audio Profile", unit="samples")
+    
+    while current_frame < total_samples or total_samples <= 0:
+        read_count = chunk_frames + (overlap_frames if current_frame > 0 else 0)
+        read_start = max(0, current_frame - overlap_frames)
         
-        # Calculate sample range required for this batch of frames
-        start_sample = current_frame * hop_length
-        end_sample = (end_frame - 1) * hop_length + frame_length
+        try:
+            waveform, sr = torchaudio.load(
+                str(video_path),
+                frame_offset=read_start,
+                num_frames=read_count,
+                normalize=True
+            )
+        except Exception:
+            logging.error(f"Error reading audio chunk at {read_start}")
+            break
+            
+        if waveform.shape[1] == 0:
+            break
+            
+        if waveform.shape[0] > 1:
+            waveform = torch.mean(waveform, dim=0, keepdim=True)
+            
+        y_cpu = waveform.squeeze(0)
+        actual_length = y_cpu.shape[0]
         
-        chunk_tensor = y_cpu[start_sample:end_sample].to(device)
+        if actual_length < frame_length:
+            y_cpu = torch.nn.functional.pad(y_cpu, (0, frame_length - actual_length))
+            
+        chunk_tensor = y_cpu.to(device)
         
-        # Unfold on GPU
-        # shape: (count, frame_length)
+        # --- RMS ---
         windows = chunk_tensor.unfold(0, frame_length, hop_length)
-        
-        # Compute RMS for the batch
         rms_chunk = torch.sqrt(torch.mean(windows**2, dim=1))
         rms_values.append(rms_chunk)
         
-        current_frame += count
-        pbar_rms.update(count)
-        
-    pbar_rms.close()
-    
-    rms = torch.cat(rms_values) if rms_values else torch.tensor([], device=device)
-    
-    
-    # --- Spectral Flux (STFT) in Batches ---
-    
-    # STFT also requires large intermediate buffers. We process in batches to keep VRAM usage low.
-    # To match the original behavior (n_fft=2048, hop_length=512, center=True), 
-    # we manually pad the input on CPU and use center=False during batch processing.
-    
-    window = torch.hann_window(2048).to(device)
-    
-    flux_values = []
-    
-    # Reuse valid batch size
-    STFT_FRAMES_PER_BATCH = 4096 * 2
-    
-    # Simulate center=True by padding the CPU array once before splitting.
-    pad_amount = 2048 // 2
-    # Reflect padding requires at least 2D input in some PyTorch versions
-    y_padded = torch.nn.functional.pad(y_cpu.unsqueeze(0), (pad_amount, pad_amount), mode='reflect').squeeze(0)
-    
-    # Calculate total frames for STFT from padded signal
-    num_stft_frames = (y_padded.shape[0] - 2048) // hop_length + 1
-    
-    pbar_flux = tqdm(total=num_stft_frames, desc="Audio Flux", unit="fr")
-    
-    current_frame = 0
-    # Initialize 'last_mag_col' as zeros (freq_bins,)
-    # n_fft=2048 -> freq_bins=1025
-    last_mag_col = torch.zeros(2048 // 2 + 1, device=device)
-    
-    while current_frame < num_stft_frames:
-        end_frame = min(current_frame + STFT_FRAMES_PER_BATCH, num_stft_frames)
-        count = end_frame - current_frame
-        
-        start_sample = current_frame * hop_length
-        end_sample = (end_frame - 1) * hop_length + 2048
-        
-        chunk_tensor = y_padded[start_sample:end_sample].to(device)
-        
-        # Run STFT on this chunk. center=False because we manually padded y_padded
-        # STFT shape: (freq_bins, count)
+        # --- STFT ---
+        # reflect pad
+        y_padded = torch.nn.functional.pad(chunk_tensor.unsqueeze(0), (2048 // 2, 2048 // 2), mode='reflect').squeeze(0)
         stft_chunk = torch.stft(
-            chunk_tensor, 
+            y_padded, 
             n_fft=2048, 
             hop_length=hop_length, 
             window=window, 
             center=False, 
             return_complex=True
         )
-        
         mag_chunk = torch.abs(stft_chunk)
         
-        # Calculate Flux
-        # We need [prev_last, curr_0, curr_1, ...]
-        # Concatenate last_mag_col to the front
-        
-        # mag_chunk: (F, T)
         combined = torch.cat([last_mag_col.unsqueeze(1), mag_chunk], dim=1)
-        
-        # Diff: (F, T)
         diff = combined[:, 1:] - combined[:, :-1]
-        
-        # Flux: sum(diff^2) over freq, then sqrt
         flux_chunk = torch.sqrt(torch.sum(diff**2, dim=0))
-        
         flux_values.append(flux_chunk)
         
-        # Update last_mag_col
         last_mag_col = mag_chunk[:, -1]
         
-        current_frame += count
-        pbar_flux.update(count)
+        del chunk_tensor, windows, y_padded, stft_chunk, mag_chunk, combined, diff
         
-        # Cleanup
-        del chunk_tensor, stft_chunk, mag_chunk, combined, diff
+        actual_forward = actual_length - (overlap_frames if current_frame > 0 else 0)
+        if actual_forward <= 0:
+            break
+            
+        current_frame += actual_forward
+        pbar.update(actual_forward)
+        
+        # EOF detection
+        if actual_length < read_count:
+            break
+
+    pbar.close()
     
-    pbar_flux.close()
-    
+    rms = torch.cat(rms_values) if rms_values else torch.tensor([], device=device)
     spectral_flux = torch.cat(flux_values) if flux_values else torch.tensor([], device=device)
     
-    # --- Post Processing (same as before) ---
-    
-    # Match lengths
+    # --- Post Processing ---
     min_len = min(rms.shape[0], spectral_flux.shape[0])
     rms = rms[:min_len]
     spectral_flux = spectral_flux[:min_len]
 
-    # Normalization
     rms_mean = rms.mean() if rms.numel() > 0 else torch.tensor(0.0, device=device)
     rms_std = (rms.std() + 1e-8) if rms.numel() > 0 else torch.tensor(1.0, device=device)
     rms_norm = (rms - rms_mean) / rms_std if rms.numel() > 0 else rms
@@ -741,7 +690,6 @@ def compute_audio_action_profile(
     flux_std = (spectral_flux.std() + 1e-8) if spectral_flux.numel() > 0 else torch.tensor(1.0, device=device)
     flux_norm = (spectral_flux - flux_mean) / flux_std if spectral_flux.numel() > 0 else spectral_flux
 
-    # Smoothing
     def smooth_gpu(x: torch.Tensor, win: int = 21) -> torch.Tensor:
         if x.numel() == 0:
             return x
@@ -763,13 +711,13 @@ def compute_audio_action_profile(
         rms_smooth if flux_smooth.numel() == 0 else flux_smooth
     )
 
-    # Convert times to CPU numpy
-    num_frames = score.shape[0]
-    times = torch.arange(num_frames, device=device) * hop_length / sample_rate if num_frames > 0 else torch.tensor([], device=device)
+    num_frames_out = score.shape[0]
+    times = torch.arange(num_frames_out, device=device) * hop_length / sample_rate if num_frames_out > 0 else torch.tensor([], device=device)
 
     return times.cpu().numpy(), score.cpu().numpy()
 
 
+@torch.no_grad()
 def compute_video_action_profile(
     video_path: Path,
     fps: int = 6,
@@ -841,8 +789,6 @@ def compute_video_action_profile(
             prev_batch_last = gray[-1]
 
             del frames_subset, gray, diffs
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
             
             pbar.update(1)
         
@@ -1281,6 +1227,11 @@ def render_video_gpu(
                     out_bytes = out_tensor.cpu().numpy().tobytes()
 
                     try:
+                        import select
+                        _, writable, _ = select.select([], [process.stdin.fileno()], [], 10.0)
+                        if not writable:
+                            logging.error("FFMPEG stdin write blocked (timeout)")
+                            break
                         process.stdin.write(out_bytes)
                     except BrokenPipeError:
                         break

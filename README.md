@@ -40,13 +40,12 @@ For the original CPU-only version, please visit [Shorts Maker](https://github.co
 - **NVIDIA GPU** with CUDA support.
 - **NVIDIA Drivers** (compatible with CUDA 13.0+ recommended).
 - Python 3.12+
-- FFmpeg (required by `moviepy`).
+- FFmpeg (used for audio extraction and NVENC encoding).
 - System libraries: `libgl1`, `libglib2.0-0` (often needed for vision libraries).
 
 Python dependencies (see `requirements.txt`):
 - `torch`, `torchaudio` (with CUDA support)
 - `PyNvCodec`, `PytorchNvCodec` (Video Processing Framework)
-- `moviepy`
 
 ## Installation
 

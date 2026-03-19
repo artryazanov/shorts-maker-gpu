@@ -104,7 +104,7 @@ def setup_mocks():
     torch_mock.cuda = create_mock_module("torch.cuda")
     torch_mock.cuda.is_available = lambda: False
     torch_mock.device = lambda x: "cpu"
-    torch_mock.tensor = lambda x, **kwargs: FakeTensor()
+    torch_mock.tensor = lambda x, **kwargs: FakeTensor(shape=(len(x),) if isinstance(x, (list, tuple)) else (100,), numel=len(x) if isinstance(x, (list, tuple)) else 100)
     torch_mock.abs = lambda x: FakeTensor(shape=x.shape if hasattr(x, 'shape') else (100,))
     torch_mock.mean = lambda x, **kwargs: FakeTensor(shape=x.shape if hasattr(x, 'shape') else (100,))
     torch_mock.sqrt = lambda x: FakeTensor(shape=x.shape if hasattr(x, 'shape') else (100,))
@@ -117,7 +117,11 @@ def setup_mocks():
     torch_mock.hann_window = lambda x, **kwargs: FakeTensor(shape=(x,) if isinstance(x, int) else x)
     torch_mock.stft = lambda x, **kwargs: FakeTensor(shape=(1025, 100))
     torch_mock.from_numpy = lambda x: x
-    torch_mock.no_grad = mock.MagicMock()
+    class DummyNoGrad:
+        def __call__(self, func): return func
+        def __enter__(self): pass
+        def __exit__(self, *args): pass
+    torch_mock.no_grad = DummyNoGrad
     torch_mock.from_dlpack = mock.MagicMock()
     torch_mock.to_dlpack = mock.MagicMock()
     
@@ -135,6 +139,10 @@ def setup_mocks():
 
     torchaudio_mock = create_mock_module("torchaudio")
     torchaudio_mock.load = mock.MagicMock()
+    class MockAudioInfo:
+        sample_rate = 48000
+        num_frames = 48000
+    torchaudio_mock.info = mock.MagicMock(return_value=MockAudioInfo())
     sys.modules["torchaudio"] = torchaudio_mock
 
     nvc_mock = create_mock_module("PyNvCodec")
