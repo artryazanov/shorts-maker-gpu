@@ -22,7 +22,7 @@ For the original CPU-only version, please visit [Shorts Maker](https://github.co
   - **Scene Detection**: Custom implementation using VPF and OpenCV.
   - **Audio Analysis**: Uses `torchaudio` on GPU for fast RMS and spectral flux calculation.
   - **Video Analysis**: Zero-copy GPU memory streaming for stable motion estimation (replaces heavy frame indices).
-  - **Image Processing**: `cupy` (CUDA-accelerated NumPy) used for heavy operations like blurring backgrounds.
+  - **Image Processing**: Native PyTorch operators used for heavy operations like blurring backgrounds (separable convolutions).
   - **Rendering**: Custom PyTorch+NVENC engine for high-performance rendering (MoviePy removed from render path).
 - Audio + video action scoring:
   - Combined ranking with tunable weights (defaults: audio 0.6, video 0.4).
@@ -45,7 +45,6 @@ For the original CPU-only version, please visit [Shorts Maker](https://github.co
 
 Python dependencies (see `requirements.txt`):
 - `torch`, `torchaudio` (with CUDA support)
-- `cupy-cuda12x`
 - `PyNvCodec`, `PytorchNvCodec` (Video Processing Framework)
 - `moviepy`
 
@@ -65,7 +64,7 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-If you encounter issues with PyTorch or CuPy not finding the GPU, refer to their respective installation guides for your specific CUDA version.
+If you encounter issues with PyTorch not finding the GPU, refer to its installation guide for your specific CUDA version.
 
 ## Usage
 

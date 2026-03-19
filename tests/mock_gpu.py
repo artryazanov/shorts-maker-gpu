@@ -168,20 +168,7 @@ def setup_mocks():
     pnvc_mock.make_tensor = mock.MagicMock(return_value=FakeTensor(shape=(3, 720, 1280), numel=3*720*1280))
     sys.modules["PytorchNvCodec"] = pnvc_mock
 
-    cupy_mock = create_mock_module("cupy")
-    cupy_mock.asarray = mock.MagicMock(side_effect=lambda x: x)
-    cupy_mock.asnumpy = mock.MagicMock(side_effect=lambda x: x)
-    cupy_mock.from_dlpack = mock.MagicMock()
-    cupy_mock.to_dlpack = mock.MagicMock()
-    sys.modules["cupy"] = cupy_mock
 
-    cupyx_mock = create_mock_module("cupyx")
-    cupyx_mock.scipy = create_mock_module("cupyx.scipy")
-    cupyx_mock.scipy.ndimage = create_mock_module("cupyx.scipy.ndimage")
-    cupyx_mock.scipy.ndimage.gaussian_filter = mock.MagicMock()
-    sys.modules["cupyx"] = cupyx_mock
-    sys.modules["cupyx.scipy"] = cupyx_mock.scipy
-    sys.modules["cupyx.scipy.ndimage"] = cupyx_mock.scipy.ndimage
 
 # Execute it once unconditionally when imported
 setup_mocks()

@@ -4,7 +4,7 @@ import numpy as np
 from pathlib import Path
 
 # --- Mock GPU libraries BEFORE importing shorts ---
-# We must mock decord, cupy, torchaudio, torch so that shorts.py can be imported
+# We must mock decord, torchaudio, torch so that shorts.py can be imported
 # even if these libraries are missing or if we are on a CPU-only node.
 
 
@@ -35,26 +35,7 @@ def test_select_background_resolution():
     assert select_background_resolution(2100) == (2160, 3840)
 
 
-def test_blur_gpu_uses_cupy():
-    # Verify blur_gpu calls cupy/cupyx functions
-    # Input is a torch tensor mock
-    image_tensor = MagicMock()
-    image_tensor.is_contiguous.return_value = True
 
-    # Configure mock return for gaussian_filter
-    # It returns a cupy array mock
-    mock_cupy_array = MagicMock()
-    shorts.cupyx.scipy.ndimage.gaussian_filter.return_value = mock_cupy_array
-
-    # Return mock torch tensor
-    shorts.torch.utils.dlpack.from_dlpack.return_value = MagicMock()
-
-    blur_gpu(image_tensor)
-
-    shorts.torch.to_dlpack.assert_called_with(image_tensor)
-    shorts.cp.from_dlpack.assert_called()
-    shorts.cupyx.scipy.ndimage.gaussian_filter.assert_called()
-    shorts.torch.utils.dlpack.from_dlpack.assert_called()
 
 
 def test_combine_scenes_merges_short_scenes():
@@ -90,6 +71,7 @@ def test_compute_video_action_profile_sequential():
 
     mock_streamer_instance.stream_batches.side_effect = mock_stream_batches
     mock_streamer_instance.__enter__.return_value = mock_streamer_instance
+    mock_streamer_instance.total_frames = 32
 
     from unittest import mock
     with mock.patch("shorts.GPUVideoStreamer", return_value=mock_streamer_instance):

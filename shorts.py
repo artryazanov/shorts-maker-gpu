@@ -24,8 +24,7 @@ from pathlib import Path
 from typing import List, Sequence, Tuple, Optional, Iterator
 import numpy as np
 from dotenv import load_dotenv
-import cupy as cp
-import cupyx.scipy.ndimage
+
 import torch
 import torchaudio
 import PyNvCodec as nvc
@@ -520,30 +519,46 @@ def detect_video_scenes_gpu(video_path: Path, threshold: float = 27.0) -> List[T
 
 
 def blur_gpu(image_tensor: torch.Tensor, sigma: float = 8.0) -> torch.Tensor:
-    """Return a blurred version of ``image_tensor`` using CuPy.
-
-    Args:
-        image_tensor: (H, W, 3) torch tensor on GPU.
-        sigma: Blur sigma.
-
-    Returns:
-        Blurred torch tensor (H, W, 3).
+    """Return a blurred version of an image using native PyTorch separable convolutions.
+    Accepts both (H, W, C) and (N, C, H, W) formats.
     """
-    # Use DLPack to zero-copy transfer to Cupy
-    # Note: image_tensor must be contiguous
-    if not image_tensor.is_contiguous():
-        image_tensor = image_tensor.contiguous()
+    if sigma <= 0:
+        return image_tensor
+        
+    # Determine format and convert to (N, C, H, W)
+    is_hwc = image_tensor.dim() == 3
+    if is_hwc:
+        x = image_tensor.unsqueeze(0).permute(0, 3, 1, 2).float()
+    else:
+        x = image_tensor.float()
 
-    cupy_array = cp.from_dlpack(torch.to_dlpack(image_tensor))
-
-    # Gaussian blur. sigma=(sigma, sigma, 0) means blur H and W, preserve channels.
-    # Convert to float for precision, then back to uint8
-    f_array = cupy_array.astype(float)
-    blurred = cupyx.scipy.ndimage.gaussian_filter(f_array, sigma=(sigma, sigma, 0))
-    blurred = blurred.astype(cupy_array.dtype)
-
-    # Convert back to torch (use DLPack protocol, avoiding deprecated CuPy .toDlpack())
-    return torch.utils.dlpack.from_dlpack(blurred)
+    channels = x.shape[1]
+    
+    # Kernel radius (typically 3 * sigma)
+    radius = int(math.ceil(3 * sigma))
+    kernel_size = 2 * radius + 1
+    
+    # Create 1D Gaussian kernel
+    coords = torch.arange(-radius, radius + 1, dtype=torch.float32, device=x.device)
+    kernel = torch.exp(-0.5 * (coords / sigma) ** 2)
+    kernel = kernel / kernel.sum()
+    
+    # Reshape for depthwise convolution (per-channel)
+    kernel_y = kernel.view(1, 1, kernel_size, 1).expand(channels, 1, kernel_size, 1)
+    kernel_x = kernel.view(1, 1, 1, kernel_size).expand(channels, 1, 1, kernel_size)
+    
+    # Add padding (reflect mode to avoid black edges)
+    x = torch.nn.functional.pad(x, (radius, radius, radius, radius), mode='reflect')
+    
+    # Apply separable convolutions (Y first, then X)
+    x = torch.nn.functional.conv2d(x, kernel_y, groups=channels)
+    x = torch.nn.functional.conv2d(x, kernel_x, groups=channels)
+    
+    # Revert to original format
+    if is_hwc:
+        x = x.squeeze(0).permute(1, 2, 0)
+        
+    return x.to(image_tensor.dtype)
 
 
 # --- Audio-based action scoring (GPU) -------------------------------------------
@@ -1234,16 +1249,8 @@ def render_video_gpu(
                         bg_frames, size=(blur_h, blur_w), mode='bilinear', align_corners=False
                     )
 
-                    # Blur via Cupy
-                    bg_small = bg_small.permute(0, 2, 3, 1).contiguous()  # back to NHWC for cupy
-                    cp_bg = cp.from_dlpack(torch.to_dlpack(bg_small))
-                    f_bg = cp_bg.astype(cp.float32)
-                    blurred_bg_cp = cupyx.scipy.ndimage.gaussian_filter(f_bg, sigma=(0, 16, 16, 0))
-                    # Explicit cast back to match original dtype usually helps, but float is fine for interpolate
-                    blurred_bg = torch.utils.dlpack.from_dlpack(blurred_bg_cp).float()
-
-                    # Resize to Final Output
-                    blurred_bg = blurred_bg.permute(0, 3, 1, 2)  # NCHW
+                    # Blur via Native PyTorch (bg_small is already NCHW)
+                    blurred_bg = blur_gpu(bg_small, sigma=16.0)
                     final_bg = torch.nn.functional.interpolate(
                         blurred_bg, size=(params.output_height, params.output_width), mode='bilinear',
                         align_corners=False
@@ -1279,7 +1286,7 @@ def render_video_gpu(
                         break
 
                     # 5. Explicit Cleanup (Critical for Loop)
-                    del frames, bg_frames, bg_small, blurred_bg, final_bg, fg_frames, final_fg, out_tensor, out_bytes, cp_bg, blurred_bg_cp
+                    del frames, bg_frames, bg_small, blurred_bg, final_bg, fg_frames, final_fg, out_tensor, out_bytes
 
                     # Periodic GC - keep it, but less frequent is fine
                     if batch_count > 0 and batch_count % 100 == 0:
