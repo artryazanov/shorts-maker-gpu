@@ -1,6 +1,6 @@
 moviepy==2.2.1
-numpy<2.0.0
-opencv-python==4.9.0.80
+numpy>=2.0.0
+opencv-python>=4.10.0.84
 pytest==8.4.2
 pytest-cov==6.0.0
 pytest-mock==3.14.0
