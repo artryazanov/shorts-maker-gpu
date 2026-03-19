@@ -45,7 +45,7 @@ RUN apt-get update && \
     ln -sf /usr/lib/x86_64-linux-gnu/libnvidia-encode.so.1 /usr/lib/x86_64-linux-gnu/libnvidia-encode.so && \
     \
     # 5.2 Build nv-codec-headers
-    git clone https://git.videolan.org/git/ffmpeg/nv-codec-headers.git /tmp/nv-codec-headers && \
+    git clone https://github.com/FFmpeg/nv-codec-headers.git /tmp/nv-codec-headers && \
     cd /tmp/nv-codec-headers && make install && \
     \
     # 5.3 Build VideoProcessingFramework
