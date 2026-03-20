@@ -20,6 +20,12 @@ dependencies = [
     "rich>=13.0.0",
 ]
 
+[project.optional-dependencies]
+docs = [
+    "mkdocs-material",
+    "mkdocstrings[python]",
+]
+
 [project.scripts]
 shorts-maker = "shorts_maker.cli:app"
 

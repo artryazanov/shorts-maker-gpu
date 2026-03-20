@@ -1,0 +1,51 @@
+site_name: Shorts Maker GPU
+site_description: High-performance library for generating short videos using NVIDIA VPF and PyTorch.
+site_author: Artem Ryazanov
+repo_url: https://github.com/artryazanov/shorts-maker-gpu
+repo_name: artryazanov/shorts-maker-gpu
+
+theme:
+  name: material
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+  
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: deep purple
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: deep purple
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+
+plugins:
+  - search
+  - mkdocstrings:
+      default_handler: python
+      handlers:
+        python:
+          options:
+            show_root_heading: true
+            show_source: true
+            docstring_style: google
+
+nav:
+  - Home: index.md
+  - Guide:
+    - Installation: guide/installation.md
+    - Quickstart: guide/quickstart.md
+  - API Reference:
+    - GPU Video Streamer: api/streamer.md
+    - Config: api/config.md
