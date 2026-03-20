@@ -98,19 +98,19 @@ def compute_video_action_profile(
     if len(motions) == 0:
         return np.array([]), np.array([])
 
-    motions = torch.cat(motions)
-    times = torch.cat(times)
+    motions_t = torch.cat(motions)
+    times_t = torch.cat(times)
 
     # Normalize and smooth (similar to audio)
-    if motions.numel() == 0:
+    if motions_t.numel() == 0:
         return np.array([]), np.array([])
-    if motions.std() == 0:
-        motions_norm = motions
+    if motions_t.std() == 0:
+        motions_norm = motions_t
     else:
-        motions_norm = (motions - motions.mean()) / (motions.std() + 1e-8)
+        motions_norm = (motions_t - motions_t.mean()) / (motions_t.std() + 1e-8)
 
     # Smooth
-    def smooth_gpu(x, win):
+    def smooth_gpu(x: torch.Tensor, win: int) -> torch.Tensor:
         if win > x.shape[0]:
             win = x.shape[0]
         if win < 2:
@@ -123,4 +123,4 @@ def compute_video_action_profile(
 
     score = smooth_gpu(motions_norm, win=int(eff_fps))
 
-    return times.cpu().numpy(), score.cpu().numpy()
+    return times_t.cpu().numpy(), score.cpu().numpy()

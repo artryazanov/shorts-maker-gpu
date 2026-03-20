@@ -5,7 +5,7 @@ import multiprocessing
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Tuple
+from typing import Any, Tuple
 
 import PyNvCodec as nvc
 import torch
@@ -17,12 +17,12 @@ from shorts_maker.io.streamer import GPUVideoStreamer
 try:
     import resource
 except ImportError:
-    resource = None
+    resource = None  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
 
 
-def log_memory_usage(tag: str = ""):
+def log_memory_usage(tag: str = "") -> None:
     """Log current memory usage (RAM and VRAM)."""
     usage_stats = []
 
@@ -410,6 +410,7 @@ def render_video_gpu(
                     try:
                         import select
 
+                        assert process.stdin is not None
                         _, writable, _ = select.select(
                             [], [process.stdin.fileno()], [], 10.0
                         )
@@ -445,7 +446,8 @@ def render_video_gpu(
             # Clean up processes and memory
             if process:
                 try:
-                    process.stdin.close()
+                    if process.stdin:
+                        process.stdin.close()
                 except Exception:
                     pass
                 process.wait()
@@ -459,11 +461,11 @@ def render_video_gpu(
             # Final memory sweep
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
-                torch.cuda.ipc_collect()
+                torch.cuda.ipc_collect()  # type: ignore[no-untyped-call]
             gc.collect()
 
 
-def render_video_gpu_isolated(*args, **kwargs) -> None:
+def render_video_gpu_isolated(*args: Any, **kwargs: Any) -> None:
     """Runs render_video_gpu in a separate process to ensure memory cleanup."""
     ctx = multiprocessing.get_context("spawn")
     p = ctx.Process(target=render_video_gpu, args=args, kwargs=kwargs)

@@ -17,7 +17,7 @@ def process(
     ),
     output_dir: Path = typer.Option(Path("generated"), help="Output directory"),
     scene_limit: int = typer.Option(None, help="Override scene limit from config"),
-):
+) -> None:
     """
     Process long videos and generate viral shorts.
     """

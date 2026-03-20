@@ -8,7 +8,7 @@ import tests.mock_gpu  # noqa: F401
 from shorts_maker.config import ProcessingConfig
 from shorts_maker.utils.scenes import _SecondsTime
 from shorts_maker.io.render import RenderParams
-from shorts_maker.core.processor import log_memory_usage
+from shorts_maker.io.render import log_memory_usage
 
 def test_processing_config():
     config = ProcessingConfig(min_short_length=20, max_short_length=60)

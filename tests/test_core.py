@@ -6,12 +6,14 @@ import numpy as np
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 import tests.mock_gpu  # noqa: F401
-import shorts_maker as shorts  # noqa: E402
-from shorts_maker.config import ProcessingConfig, _SecondsTime  # noqa: E402
+from shorts_maker.core.processor import VideoProcessor
+from shorts_maker.utils.scenes import combine_scenes, split_overlong_scenes
+from shorts_maker.config import ProcessingConfig  # noqa: E402
+from shorts_maker.utils.scenes import _SecondsTime  # noqa: E402
 
 def test_combine_scenes_empty():
     config = ProcessingConfig()
-    assert shorts.combine_scenes([], config) == []
+    assert combine_scenes([], config) == []
 
 def test_combine_scenes_basic():
     config = ProcessingConfig(min_short_length=2, max_short_length=2, max_combined_scene_length=10)
@@ -22,7 +24,7 @@ def test_combine_scenes_basic():
     s2 = [_SecondsTime(1.0), _SecondsTime(2.0)] # small
     
     # if both are small, run continues. 
-    res = shorts.combine_scenes([s1, s2], config)
+    res = combine_scenes([s1, s2], config)
     # They should be merged into one scene [0.0, 2.0] if final duration >= threshold
     # final_duration = 2.0. threshold = min_short_length = 2. It fits.
     assert len(res) == 1
@@ -36,18 +38,18 @@ def test_split_overlong_scenes():
     # n = math.floor(50 / 20) = 2. parts will be 25s each.
     s1 = [_SecondsTime(0.0), _SecondsTime(50.0)]
     
-    res = shorts.split_overlong_scenes([s1], config)
+    res = split_overlong_scenes([s1], config)
     assert len(res) == 2
     assert res[0][0].get_seconds() == 0.0
     assert res[0][1].get_seconds() == 25.0
     assert res[1][0].get_seconds() == 25.0
     assert res[1][1].get_seconds() == 50.0
 
-@mock.patch("shorts_maker.utils.scenes.detect_video_scenes_gpu")
-@mock.patch("shorts_maker.analysis.audio.compute_audio_action_profile")
-@mock.patch("shorts_maker.analysis.video.compute_video_action_profile")
-@mock.patch("shorts_maker.utils.scenes.render_video_gpu_isolated")
-@mock.patch("shorts_maker.utils.scenes.get_render_params")
+@mock.patch("shorts_maker.core.processor.detect_video_scenes_gpu")
+@mock.patch("shorts_maker.core.processor.compute_audio_action_profile")
+@mock.patch("shorts_maker.core.processor.compute_video_action_profile")
+@mock.patch("shorts_maker.core.processor.render_video_gpu_isolated")
+@mock.patch("shorts_maker.core.processor.get_render_params")
 def test_process_video(mock_get_params, mock_render, mock_video_action, mock_audio_action, mock_detect, tmp_path):
     config = ProcessingConfig()
     
@@ -69,13 +71,13 @@ def test_process_video(mock_get_params, mock_render, mock_video_action, mock_aud
         mock_dmx_instance.Framerate.return_value = 30.0
         mock_dmx.return_value = mock_dmx_instance
         
-        shorts.process_video(dummy_vid, config, tmp_path)
+        VideoProcessor(config).process_video(dummy_vid, tmp_path)
         
     mock_render.assert_called_once()
     mock_get_params.assert_called_once()
 
-@mock.patch("shorts_maker.utils.scenes.render_video_gpu_isolated")
-@mock.patch("shorts_maker.utils.scenes.get_render_params")
+@mock.patch("shorts_maker.core.processor.render_video_gpu_isolated")
+@mock.patch("shorts_maker.core.processor.get_render_params")
 def test_process_video_no_scenes(mock_get_params, mock_render, tmp_path):
     """Test the fallback branch where no scenes are detected."""
     config = ProcessingConfig()
@@ -83,17 +85,17 @@ def test_process_video_no_scenes(mock_get_params, mock_render, tmp_path):
     dummy_vid = tmp_path / "dummy.mp4"
     dummy_vid.touch()
 
-    with mock.patch("shorts_maker.utils.scenes.detect_video_scenes_gpu", return_value=[]), \
-         mock.patch("shorts_maker.analysis.audio.compute_audio_action_profile", return_value=(np.array([]), np.array([]))), \
-         mock.patch("shorts_maker.analysis.video.compute_video_action_profile", return_value=(np.array([]), np.array([]))), \
-         mock.patch("shorts_maker.utils.scenes.nvc.PyFFmpegDemuxer") as mock_dmx:
+    with mock.patch("shorts_maker.core.processor.detect_video_scenes_gpu", return_value=[]), \
+         mock.patch("shorts_maker.core.processor.compute_audio_action_profile", return_value=(np.array([]), np.array([]))), \
+         mock.patch("shorts_maker.core.processor.compute_video_action_profile", return_value=(np.array([]), np.array([]))), \
+         mock.patch("shorts_maker.core.processor.nvc.PyFFmpegDemuxer") as mock_dmx:
         
         mock_dmx_instance = mock.MagicMock()
         mock_dmx_instance.Numframes.return_value = 3000
         mock_dmx_instance.Framerate.return_value = 30.0
         mock_dmx.return_value = mock_dmx_instance
         
-        shorts.process_video(dummy_vid, config, tmp_path)
+        VideoProcessor(config).process_video(dummy_vid, tmp_path)
     
     # Should randomly sample a clip and render
     mock_render.assert_called_once()

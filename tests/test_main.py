@@ -14,4 +14,4 @@ def test_cli_help():
     """Verify that the CLI helps text displays properly."""
     result = runner.invoke(app, ["--help"])
     assert result.exit_code == 0
-    assert "GPU-accelerated shorts generator" in result.stdout
+    assert "Process long videos" in result.stdout

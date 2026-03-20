@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Iterator, Optional, Tuple
+from typing import Any, Iterator, Optional, Tuple
 
 import numpy as np
 import PyNvCodec as nvc
@@ -115,10 +115,10 @@ class GPUVideoStreamer:
             del self.nv_dmx
             raise
 
-    def __enter__(self):
+    def __enter__(self) -> "GPUVideoStreamer":
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         del self.dec_surface
         del self.nv_cvt
         if getattr(self, "nv_cvt_yuv", None):
@@ -161,6 +161,7 @@ class GPUVideoStreamer:
                 current_surface = self.dec_surface
 
                 if self.nv_res:
+                    assert self.nv_res is not None
                     try:
                         res_surface = self.nv_res.Execute(current_surface)
                         if type(res_surface).__name__ == "MagicMock":
@@ -173,6 +174,7 @@ class GPUVideoStreamer:
                 try:
                     cc_ctx = nvc.ColorspaceConversionContext(nvc.ColorSpace.BT_601, nvc.ColorRange.MPEG)
                     if getattr(self, "nv_cvt_yuv", None):
+                        assert self.nv_cvt_yuv is not None
                         yuv_surface = self.nv_cvt_yuv.Execute(current_surface, cc_ctx)
                         cvt_surface = self.nv_cvt.Execute(yuv_surface, cc_ctx)
                     else:
@@ -181,6 +183,7 @@ class GPUVideoStreamer:
                         raise TypeError
                 except (TypeError, AttributeError):
                     if getattr(self, "nv_cvt_yuv", None):
+                        assert self.nv_cvt_yuv is not None
                         yuv_surface = nvc.Surface.Make(nvc.PixelFormat.YUV420, self.target_w, self.target_h, self.gpu_id)
                         self.nv_cvt_yuv.Execute(current_surface, yuv_surface)
                         cvt_surface = nvc.Surface.Make(self.nv_cvt.Format(), self.target_w, self.target_h, self.gpu_id)

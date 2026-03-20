@@ -117,6 +117,7 @@ def setup_mocks():
     torch_mock.hann_window = lambda x, **kwargs: FakeTensor(shape=(x,) if isinstance(x, int) else x)
     torch_mock.stft = lambda x, **kwargs: FakeTensor(shape=(1025, 100))
     torch_mock.from_numpy = lambda x: x
+    torch_mock.Tensor = FakeTensor
     class DummyNoGrad:
         def __call__(self, func): return func
         def __enter__(self): pass
@@ -149,6 +150,8 @@ def setup_mocks():
     nvc_mock.PixelFormat = create_mock_module("PyNvCodec.PixelFormat")
     nvc_mock.PixelFormat.RGB = "RGB"
     nvc_mock.PixelFormat.BGR = "BGR"
+    nvc_mock.PixelFormat.NV12 = "NV12"
+    nvc_mock.PixelFormat.YUV420 = "YUV420"
     nvc_mock.SeekMode = create_mock_module("PyNvCodec.SeekMode")
     nvc_mock.SeekMode.PREV_KEY_FRAME = "PREV_KEY_FRAME"
     

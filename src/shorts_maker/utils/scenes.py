@@ -81,10 +81,12 @@ def detect_video_scenes_gpu(
             return self._filter_merge(frame_num, above_threshold)
 
         def _filter_merge(self, frame_num: int, above_threshold: bool) -> List[int]:
+            assert self._last_above is not None
             min_length_met = (frame_num - self._last_above) >= self._filter_length
             if above_threshold:
                 self._last_above = frame_num
             if self._merge_triggered:
+                assert self._merge_start is not None
                 num_merged_frames = self._last_above - self._merge_start
                 if min_length_met and (not above_threshold) and (num_merged_frames >= self._filter_length):
                     self._merge_triggered = False
@@ -173,7 +175,7 @@ def detect_video_scenes_gpu(
 
 
 def scene_action_score(
-    scene: Tuple,
+    scene: Tuple[_SecondsTime, _SecondsTime],
     audio_times: np.ndarray,
     audio_score: np.ndarray,
     video_times: np.ndarray | None = None,
@@ -208,7 +210,7 @@ def scene_action_score(
 
 
 def _best_window_single(
-    scene: Tuple,
+    scene: Tuple[_SecondsTime, _SecondsTime],
     window_length: float,
     times: np.ndarray,
     score: np.ndarray,
@@ -254,7 +256,7 @@ def _best_window_single(
 
 
 def best_action_window_start(
-    scene: Tuple,
+    scene: Tuple[_SecondsTime, _SecondsTime],
     window_length: float,
     audio_times: np.ndarray,
     audio_score: np.ndarray,
@@ -320,20 +322,20 @@ def best_action_window_start(
 
 
 def combine_scenes(
-    scene_list: Sequence[Tuple], config: ProcessingConfig
-) -> List[List]:
+    scene_list: Sequence[Tuple[_SecondsTime, _SecondsTime]], config: ProcessingConfig
+) -> List[Tuple[_SecondsTime, _SecondsTime]]:
     """Combine adjacent scenes while preserving content."""
 
     if not scene_list:
         return []
 
-    def is_small(scene) -> bool:
+    def is_small(scene: Sequence[_SecondsTime]) -> bool:
         return (
             scene[1].get_seconds() - scene[0].get_seconds()
         ) < config.min_short_length
 
     n = len(scene_list)
-    out: List[List] = []
+    out: List[Tuple[_SecondsTime, _SecondsTime]] = []
 
     # Initialize first run
     run_start_idx = 0
@@ -351,7 +353,7 @@ def combine_scenes(
                 run_duration = run_end_time.get_seconds() - run_start_time.get_seconds()
                 if run_duration > config.max_combined_scene_length:
                     prev_end_time = scene_list[i - 1][1]
-                    out.append([run_start_time, prev_end_time])
+                    out.append((run_start_time, prev_end_time))
                     run_start_idx = i
                     run_start_time = scene_list[i][0]
                     run_end_time = scene_list[i][1]
@@ -359,12 +361,12 @@ def combine_scenes(
                     is_last_scene = i == n - 1
                     if is_last_scene:
                         prev_end_time = scene_list[i - 1][1]
-                        out.append([run_start_time, prev_end_time])
+                        out.append((run_start_time, prev_end_time))
                         run_start_idx = i
                         run_start_time = scene_list[i][0]
                         run_end_time = scene_list[i][1]
                     else:
-                        out.append([run_start_time, run_end_time])
+                        out.append((run_start_time, run_end_time))
                         run_start_idx = i + 1
                         run_start_time = scene_list[i][1]
                         run_end_time = scene_list[i][1]
@@ -379,7 +381,7 @@ def combine_scenes(
             )
 
             if run_duration >= threshold:
-                out.append([run_start_time, run_end_time])
+                out.append((run_start_time, run_end_time))
                 run_start_idx = i
                 run_type_small = current_small
                 run_start_time = scene_list[i][0]
@@ -400,16 +402,16 @@ def combine_scenes(
         config.middle_short_length if is_boundary else config.min_short_length
     )
     if final_duration >= threshold:
-        out.append([run_start_time, run_end_time])
+        out.append((run_start_time, run_end_time))
 
     return out
 
 
 def split_overlong_scenes(
-    combined_scene_list: List[List], config: ProcessingConfig
-) -> List[List]:
+    combined_scene_list: List[Tuple[_SecondsTime, _SecondsTime]], config: ProcessingConfig
+) -> List[Tuple[_SecondsTime, _SecondsTime]]:
     """Split scenes longer than 4 * max_short_length into n equal parts."""
-    result: List[List] = []
+    result: List[Tuple[_SecondsTime, _SecondsTime]] = []
     threshold = 4 * config.max_short_length
     for scene in combined_scene_list:
         start_s = scene[0].get_seconds()
@@ -426,7 +428,7 @@ def split_overlong_scenes(
             for i in range(n):
                 part_start = start_s + i * part_len
                 part_end = start_s + (i + 1) * part_len
-                result.append([_SecondsTime(part_start), _SecondsTime(part_end)])
+                result.append((_SecondsTime(part_start), _SecondsTime(part_end)))
         else:
             result.append(scene)
 

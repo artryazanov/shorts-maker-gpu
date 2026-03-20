@@ -7,7 +7,7 @@ sys.path.append(str(Path(__file__).resolve().parent.parent))
 import tests.mock_gpu  # noqa: F401
 from shorts_maker.utils.scenes import detect_video_scenes_gpu  # noqa: E402
 
-@mock.patch("shorts_maker.io.streamer.GPUVideoStreamer")
+@mock.patch("shorts_maker.utils.scenes.GPUVideoStreamer")
 @mock.patch("shorts_maker.utils.scenes.nvc.PyFFmpegDemuxer")
 def test_detect_video_scenes_empty_video(mock_dmx, mock_streamer):
     """Test scene detection when video has 0 frames."""
@@ -27,7 +27,7 @@ def test_detect_video_scenes_empty_video(mock_dmx, mock_streamer):
     scenes = detect_video_scenes_gpu(Path("dummy.mp4"))
     assert len(scenes) == 0
 
-@mock.patch("shorts_maker.io.streamer.GPUVideoStreamer")
+@mock.patch("shorts_maker.utils.scenes.GPUVideoStreamer")
 @mock.patch("shorts_maker.utils.scenes.nvc.PyFFmpegDemuxer")
 def test_detect_video_scenes_no_cuts(mock_dmx, mock_streamer):
     """Test scene detection when no cuts exist."""
@@ -58,30 +58,14 @@ def test_detect_video_scenes_no_cuts(mock_dmx, mock_streamer):
     mock_streamer_context.__enter__.return_value = mock_streamer_instance
     mock_streamer.return_value = mock_streamer_context
     
-    import numpy as np
-    
-    cv2_mock = mock.MagicMock()
-    def dummy_cvt(img, mode):
-        return np.ones_like(img) * 10
-    cv2_mock.cvtColor.side_effect = dummy_cvt
-    cv2_mock.COLOR_BGR2HSV = 40
-    
-    def dummy_split(hsv):
-        h = np.ones((hsv.shape[0], hsv.shape[1]), dtype=np.uint8) * 10
-        s = np.ones((hsv.shape[0], hsv.shape[1]), dtype=np.uint8) * 50
-        v = np.ones((hsv.shape[0], hsv.shape[1]), dtype=np.uint8) * 100
-        return h, s, v
-    cv2_mock.split.side_effect = dummy_split
-    
-    sys.modules["cv2"] = cv2_mock
-    
     scenes = detect_video_scenes_gpu(Path("dummy.mp4"), threshold=27.0)
     
     assert len(scenes) == 0
 
-@mock.patch("shorts_maker.io.streamer.GPUVideoStreamer")
+@mock.patch("shorts_maker.utils.scenes.cv2")
+@mock.patch("shorts_maker.utils.scenes.GPUVideoStreamer")
 @mock.patch("shorts_maker.utils.scenes.nvc.PyFFmpegDemuxer")
-def test_detect_video_scenes_with_cuts(mock_dmx, mock_streamer):
+def test_detect_video_scenes_with_cuts(mock_dmx, mock_streamer, mock_cv2):
     """Test scene detection when threshold is exceeded."""
     mock_dmx_instance = mock.MagicMock()
     mock_dmx_instance.Width.return_value = 1920
@@ -110,20 +94,18 @@ def test_detect_video_scenes_with_cuts(mock_dmx, mock_streamer):
     mock_streamer.return_value = mock_streamer_context
     
     import numpy as np
-    cv2_mock = mock.MagicMock()
-    cv2_mock.COLOR_BGR2HSV = 40
-    
     call_count = [0]
+    
     def dummy_split(hsv):
         call_count[0] += 1
         val = 10 if (call_count[0] // 20) % 2 == 0 else 200
         h = np.ones((10, 10), dtype=np.uint8) * val
         return h, h, h
-        
-    cv2_mock.split.side_effect = dummy_split
-    cv2_mock.cvtColor.side_effect = lambda img, mode: img
-    sys.modules["cv2"] = cv2_mock
-    
+
+    mock_cv2.split.side_effect = dummy_split
+    mock_cv2.cvtColor.side_effect = lambda img, mode: img
+    mock_cv2.COLOR_BGR2HSV = 40
+
     scenes = detect_video_scenes_gpu(Path("dummy.mp4"), threshold=1.0) 
     
     assert len(scenes) > 1
