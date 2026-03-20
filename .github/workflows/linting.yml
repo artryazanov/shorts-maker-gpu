@@ -2,10 +2,14 @@ name: Linting
 
 on:
   push:
+    branches:
+      - main
     paths:
       - '**/*.py'
       - '.github/workflows/linting.yml'
   pull_request:
+    branches:
+      - main
     paths:
       - '**/*.py'
       - '.github/workflows/linting.yml'
