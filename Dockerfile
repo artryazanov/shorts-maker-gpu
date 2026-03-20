@@ -1,80 +1,76 @@
-FROM pytorch/pytorch:2.2.0-cuda12.1-cudnn8-devel
+FROM pytorch/pytorch:2.10.0-cuda13.0-cudnn9-devel
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# 1. Install system tools
+# 1. System dependencies (single layer)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libgl1-mesa-glx \
+    libgl1 \
     libglib2.0-0 \
     git \
     build-essential \
     cmake \
     pkg-config \
     wget \
+    ffmpeg \
+    libavcodec-dev \
+    libavformat-dev \
+    libavutil-dev \
+    libswscale-dev \
+    libavfilter-dev \
+    libavdevice-dev \
+    python3-dev \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# 2. FIX: Install FFmpeg 4.4.2
-# This is the latest version with which Decord reliably compiles without errors
-RUN conda update -n base -c defaults conda -y && \
-    conda install -y -c conda-forge "ffmpeg=4.4.2"
-
-# 3. Set up environment
-ENV FFMPEG_BINARY=/opt/conda/bin/ffmpeg
+# 2. Environment variables
+ENV FFMPEG_BINARY=/usr/bin/ffmpeg
 ENV LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:/usr/local/cuda/lib64:$LD_LIBRARY_PATH
-# Increase Decord EOF retry limit to better handle long 4K videos with slow tail retrieval
-ENV DECORD_EOF_RETRY_MAX=65536
-ENV DECORD_SKIP_TAIL_FRAMES=0
 
-# Ensure NVIDIA driver capabilities include video for codecs
-ENV NVIDIA_DRIVER_CAPABILITIES=all
+# 3. NVIDIA MAGIC: Allow pass-through of video libraries (NVENC/NVDEC) from the host at runtime
+ENV NVIDIA_DRIVER_CAPABILITIES=compute,video,utility
 
-# 4. Install codec headers
-# Important: for the older ffmpeg it's better to use a pinned header version, but git master should also work
-RUN git clone https://git.videolan.org/git/ffmpeg/nv-codec-headers.git && \
-    cd nv-codec-headers && \
-    make install && \
-    cd .. && rm -rf nv-codec-headers
+# 4. Install toolchain
+RUN pip install --break-system-packages --no-cache-dir --upgrade pip "setuptools<70.0.0" wheel scikit-build ninja hatchling
 
-# 5. Install NVIDIA driver libraries for linking
-# We install "headless" driver libraries so we have the .so files for linking.
-# At runtime, the NVIDIA Container Toolkit will mount the host driver's files over these.
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libnvidia-decode-535 \
-    libnvidia-encode-535 \
-    && rm -rf /var/lib/apt/lists/*
-
-# Create symlinks, so CMake and Python can find the libraries (packages typically provide .so.1/.so.535)
-RUN ln -sf /usr/lib/x86_64-linux-gnu/libnvcuvid.so.1 /usr/lib/x86_64-linux-gnu/libnvcuvid.so && \
-    ln -sf /usr/lib/x86_64-linux-gnu/libnvidia-encode.so.1 /usr/lib/x86_64-linux-gnu/libnvidia-encode.so
-
-# 6. Install Python dependencies
-COPY requirements.txt requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
-
-# 7. Build Decord
-RUN git clone --recursive https://github.com/dmlc/decord && \
-    cd decord && \
-    mkdir build && cd build && \
-    cmake .. -DUSE_CUDA=ON -DCMAKE_BUILD_TYPE=Release \
-    -DCUDA_nvcuvid_LIBRARY=/usr/lib/x86_64-linux-gnu/libnvcuvid.so && \
-    make -j$(nproc) && \
-    cd ../python && \
-    python setup.py install && \
-    cd /app && rm -rf decord
-
-# 8. C++ library fix
-RUN rm /opt/conda/lib/libstdc++.so.6 && \
-    ln -s /usr/lib/x86_64-linux-gnu/libstdc++.so.6 /opt/conda/lib/libstdc++.so.6
-
-# 9. Cleanup build-time dependencies
-# Remove the installed NVIDIA libraries so the container uses the host mounted ones at runtime
-RUN apt-get purge -y libnvidia-decode-535 libnvidia-encode-535 && \
-    rm -f /usr/lib/x86_64-linux-gnu/libnvcuvid.so /usr/lib/x86_64-linux-gnu/libnvidia-encode.so && \
+# 5. BUILD BLOCK: Install drivers -> Build VPF -> Remove drivers (ALL IN ONE LAYER)
+# This guarantees that the hardcoded driver version (550) is used only for linking
+# and DOES NOT end up in the final image.
+RUN apt-get update && \
+    # 5.1 Install stub libraries for linking
+    apt-get install -y --no-install-recommends libnvidia-decode-550 libnvidia-encode-550 && \
+    ln -sf /usr/lib/x86_64-linux-gnu/libnvcuvid.so.1 /usr/lib/x86_64-linux-gnu/libnvcuvid.so && \
+    ln -sf /usr/lib/x86_64-linux-gnu/libnvidia-encode.so.1 /usr/lib/x86_64-linux-gnu/libnvidia-encode.so && \
+    \
+    # 5.2 Build nv-codec-headers
+    git clone https://github.com/FFmpeg/nv-codec-headers.git /tmp/nv-codec-headers && \
+    cd /tmp/nv-codec-headers && make install && \
+    \
+    # 5.3 Build VideoProcessingFramework
+    git clone https://github.com/NVIDIA/VideoProcessingFramework.git /tmp/VPF && \
+    cd /tmp/VPF && mkdir build && cd build && \
+    cmake .. \
+      -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+      -DCMAKE_CUDA_ARCHITECTURES="80;86;89;90" \
+      -DFFMPEG_DIR:PATH="/usr" \
+      -DVIDEO_CODEC_SDK_DIR:PATH="/tmp/nv-codec-headers" \
+      -DGENERATE_PYTHON_BINDINGS:BOOL="1" \
+      -DPYTHON_LIBRARY="/usr/lib/x86_64-linux-gnu/libpython3.12.so" \
+      -DPYTHON_INCLUDE_DIR="/usr/include/python3.12" \
+      -DCMAKE_INSTALL_PREFIX:PATH="/usr/local" && \
+    make -j$(nproc) && make install && \
+    cd .. && \
+    export CMAKE_ARGS="-DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_CUDA_ARCHITECTURES='80;86;89;90'" && \
+    pip install --break-system-packages . --no-build-isolation && \
+    pip install --break-system-packages src/PytorchNvCodec --no-build-isolation && \
+    \
+    # 5.4 COMPLETE CLEANUP IN THE SAME LAYER
+    apt-get purge -y libnvidia-decode-550 libnvidia-encode-550 && \
     apt-get autoremove -y && \
-    rm -rf /var/lib/apt/lists/*
+    rm -f /usr/lib/x86_64-linux-gnu/libnvcuvid.so /usr/lib/x86_64-linux-gnu/libnvidia-encode.so && \
+    rm -rf /var/lib/apt/lists/* /tmp/nv-codec-headers /tmp/VPF
 
 COPY . .
+RUN pip install --break-system-packages .
 
-CMD ["python", "shorts.py"]
+CMD ["shorts-maker"]

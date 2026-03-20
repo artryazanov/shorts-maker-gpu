@@ -2,12 +2,14 @@ name: Linting
 
 on:
   push:
-    branches: [ main, develop ]
+    branches:
+      - main
     paths:
       - '**/*.py'
       - '.github/workflows/linting.yml'
   pull_request:
-    branches: [ main, develop ]
+    branches:
+      - main
     paths:
       - '**/*.py'
       - '.github/workflows/linting.yml'
@@ -25,8 +27,14 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install Ruff
-        run: pip install ruff
+      - name: Install Linting Tools
+        run: pip install ruff mypy types-tqdm pydantic hatchling
+
+      - name: Install package
+        run: pip install -e .
 
       - name: Run Ruff
         run: ruff check .
+
+      - name: Run Mypy
+        run: mypy src/shorts_maker

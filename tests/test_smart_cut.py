@@ -3,7 +3,7 @@ import numpy as np
 from pathlib import Path
 
 # --- Mock GPU libraries BEFORE importing shorts ---
-# We must mock decord, cupy, torchaudio, torch so that shorts.py can be imported
+# We must mock decord, torchaudio, torch so that shorts.py can be imported
 # even if these libraries are missing or if we are on a CPU-only node.
 
 
@@ -13,7 +13,7 @@ sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 # Import shorts AFTER mocking
 import tests.mock_gpu  # noqa: F401
-from shorts import find_smart_end_point  # noqa: E402
+from shorts_maker.utils.scenes import find_smart_end_point  # noqa: E402
 
 
 def test_find_smart_end_point_basic():
