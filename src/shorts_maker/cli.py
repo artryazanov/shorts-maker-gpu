@@ -18,8 +18,20 @@ def process(
     output_dir: Path = typer.Option(Path("generated"), help="Output directory"),
     scene_limit: int = typer.Option(None, help="Override scene limit from config"),
 ) -> None:
-    """
-    Process long videos and generate viral shorts.
+    """Processes long gameplay videos to generate hardware-accelerated viral shorts.
+
+    This command orchestrates the entire pipeline: reading source files, analyzing audio
+    and video streams for high-action scenes, evaluating smart crop boundaries, and finally 
+    rendering the optimal shorts using GPU acceleration (NVENC).
+
+    Args:
+        input_dir: Directory containing the source long-form videos.
+        output_dir: Directory where generated short clips will be saved.
+        scene_limit: Optional integer to override the maximum amount of clips generated 
+            per standard video (defaults to the amount in .env config).
+
+    Raises:
+        typer.Exit: If the provided `input_dir` does not exist or is not a valid directory.
     """
     # Configure logging for CLI
     logging.basicConfig(

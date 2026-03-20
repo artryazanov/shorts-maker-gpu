@@ -24,13 +24,39 @@ logger = logging.getLogger(__name__)
 
 
 class VideoProcessor:
-    """Core processor for generating viral shorts from long-form video."""
+    """Core processor for generating viral shorts from long-form video.
+    
+    This class orchestrates the entire hardware-accelerated pipeline: scene detection,
+    audio/video action profiling, intelligent clipping (smart cuts), and GPU-based 
+    compositing and rendering via NVENC.
+
+    Attributes:
+        config (ProcessingConfig): Configuration settings for the generation pipeline.
+    """
 
     def __init__(self, config: ProcessingConfig):
+        """Initializes the video processor with the given configuration.
+
+        Args:
+            config: A ProcessingConfig object containing target aspect ratios, 
+                scene limits, and duration constraints.
+        """
         self.config = config
 
     def process_video(self, video_file: Path, output_dir: Path) -> None:
-        """Process a single video file and generate short clips."""
+        """Processes a single video file to generate multiple short clips.
+
+        Analyzes the video to find high-action scenes using combined audio-visual 
+        scoring, groups them by length, determines optimal start/end points using a 
+        smart cut algorithm, and dispatches the rendering process.
+
+        Args:
+            video_file: Path to the source gameplay video file.
+            output_dir: Directory where the generated short clips will be saved.
+
+        Raises:
+            RuntimeError: If the rendering process fails or FFmpeg encounters an error.
+        """
         logger.info("\nProcess: %s", video_file.name)
 
         logger.info("Detecting scenes (GPU)...")

@@ -18,13 +18,21 @@ def compute_video_action_profile(
     fps: int = 6,
     downscale_factor: int = 4,
 ) -> Tuple[np.ndarray, np.ndarray]:
-    """Compute video-based "action score" on GPU.
+    """Computes a frame-by-frame video "action score" entirely on the GPU.
 
-    Uses Decord to read frames directly to GPU memory and computes
-    mean absolute pixel difference.
+    Uses the GPUVideoStreamer to read frames directly into VRAM, converts them to 
+    grayscale, and calculates the mean absolute pixel difference between consecutive 
+    frames to quantify motion/action.
 
-    Robust to DECORD EOF issues: wraps get_batch with retries/chunking and
-    allows configuring DECORD_EOF_RETRY_MAX via environment.
+    Args:
+        video_path: Path to the input video file.
+        fps: Target framerate for subsampling (reduces computational load).
+        downscale_factor: Factor by which to reduce frame dimensions before computing diffs.
+
+    Returns:
+        A tuple containing:
+            - times (np.ndarray): Array of timestamps (in seconds) for each evaluated frame.
+            - score (np.ndarray): Array of normalized, smoothed action scores.
     """
 
     # 1) Get metadata and calculate dimensions

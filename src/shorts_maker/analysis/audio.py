@@ -16,13 +16,31 @@ def compute_audio_action_profile(
     frame_length: int = 2048,
     hop_length: int = 512,
 ) -> Tuple[np.ndarray, np.ndarray]:
-    """Compute audio-based "action score" on GPU with memory-efficient batching.
+    """Computes an audio-based "action score" on the GPU using memory-efficient batching.
+
+    This function analyzes the audio track to identify high-energy moments (action). 
+    It calculates a combined score based on Root Mean Square (RMS) energy for volume/loudness 
+    and Spectral Flux for sudden changes in frequencies (roughness/impacts). 
+    Operations are vectorized and executed on the GPU via PyTorch to handle long videos efficiently.
+
+    Args:
+        video_path: Path to the input video or audio file.
+        frame_length: The size of the STFT window and RMS frame (in samples). 
+            Higher values give better frequency resolution but worse time resolution.
+        hop_length: The number of samples between successive frames. 
+            Determines the temporal resolution of the output score.
 
     Returns:
-      times  - array of times (seconds) for each feature frame
-      score  - combined action score (loudness + spectral "roughness")
-    """
+        A tuple containing:
+            - times (np.ndarray): Array of timestamps (in seconds) corresponding to each audio frame.
+            - score (np.ndarray): Array of normalized, smoothed action scores combining RMS and Spectral Flux. 
+              Returns empty arrays if audio loading fails.
 
+    Notes:
+        - Audio is processed in 2-minute chunks to maintain a low RAM/VRAM footprint.
+        - The final score is a weighted combination: 0.6 * RMS + 0.4 * Spectral Flux.
+        - Includes GPU-accelerated 1D convolution for smoothing the final score array.
+    """
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     try:

@@ -12,9 +12,19 @@ import torch
 logger = logging.getLogger(__name__)
 
 class GPUVideoStreamer:
-    """
-    Hardware-accelerated video streamer using VPF.
-    Encapsulates Demuxer -> Decoder -> Resizer -> Converter.
+    """Hardware-accelerated video streamer using NVIDIA Video Processing Framework (VPF).
+    
+    This class encapsulates the Demuxer, Decoder, Resizer, and Color Space Converter 
+    to create a zero-copy processing pipeline directly on the GPU. Frames are never 
+    copied to the CPU RAM, ensuring maximum throughput for AI and video processing tasks.
+
+    Attributes:
+        video_path (str): Path to the source video file.
+        gpu_id (int): ID of the NVIDIA GPU to use for decoding.
+        target_w (int): Target width for resizing.
+        target_h (int): Target height for resizing.
+        fps (float): Framerate of the source video.
+        total_frames (int): Total number of frames in the video.
     """
     def __init__(
         self, 
@@ -25,6 +35,20 @@ class GPUVideoStreamer:
         pix_fmt: nvc.PixelFormat = nvc.PixelFormat.RGB,
         seek_time: float = 0.0,
     ):
+        """Initializes the GPU streaming pipeline.
+
+        Args:
+            video_path: Path to the input video file.
+            gpu_id: Target GPU device index (default: 0).
+            target_width: Desired output width. If None, uses original source width.
+            target_height: Desired output height. If None, uses original source height.
+            pix_fmt: Desired output pixel format (e.g., nvc.PixelFormat.RGB).
+            seek_time: Time in seconds to seek to before starting the decode process.
+
+        Raises:
+            Exception: If PyNvCodec fails to initialize the demuxer or decoder due to 
+                corrupted video or incompatible hardware.
+        """
         self.video_path = str(video_path)
         self.gpu_id = gpu_id
         
@@ -130,9 +154,27 @@ class GPUVideoStreamer:
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
-    def stream_batches(self, batch_size: int = 16, step: int = 1, max_frames: Optional[int] = None) -> Iterator[Tuple[torch.Tensor, list[int]]]:
-        """
-        Gives batches and local indices (from self.start_frame).
+    def stream_batches(
+        self, 
+        batch_size: int = 16, 
+        step: int = 1, 
+        max_frames: Optional[int] = None
+    ) -> Iterator[Tuple[torch.Tensor, list[int]]]:
+        """Yields batches of decoded frames as PyTorch tensors directly in VRAM.
+
+        Reads packets from the demuxer, decodes them to GPU surfaces, applies optional
+        resizing and color conversion, and exposes the GPU memory as a standard PyTorch
+        tensor.
+
+        Args:
+            batch_size: Number of frames to include in each yielded batch.
+            step: Frame skip interval (e.g., step=2 processes every second frame).
+            max_frames: Maximum number of frames to yield before stopping.
+
+        Yields:
+            A tuple containing:
+                - frames (torch.Tensor): A batch of frames on the GPU with shape (N, H, W, 3).
+                - indices (list[int]): Global frame indices corresponding to the yielded batch.
         """
         batch_frames = []
         batch_indices = []

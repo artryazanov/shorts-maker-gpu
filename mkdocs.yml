@@ -48,5 +48,7 @@ nav:
     - Installation: guide/installation.md
     - Quickstart: guide/quickstart.md
   - API Reference:
+    - Video Processor: api/processor.md
+    - Scene Detection & Analytics: api/analytics.md
     - GPU Video Streamer: api/streamer.md
-    - Config: api/config.md
+    - Configuration: api/config.md

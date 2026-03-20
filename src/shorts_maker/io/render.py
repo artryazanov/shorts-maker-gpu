@@ -193,7 +193,22 @@ def render_video_gpu(
     output_path: Path,
     max_error_depth: int = 3,
 ) -> None:
-    """Render the clip using GPU compositing and FFMPEG NVENC (Optimized)."""
+    """Renders the final short clip using GPU compositing and FFmpeg NVENC.
+
+    This highly optimized hardware-accelerated pipeline utilizes VPF (PyNvCodec) to
+    decode frames directly into VRAM. It then applies PyTorch-based GPU tensor manipulations
+    (including background cropping, separable convolution blurring, and foreground overlay).
+    The composited frames are streamed into a subprocess running FFmpeg with the `hevc_nvenc`
+    encoder to produce the final `mp4` output.
+
+    Args:
+        params: RenderParams object containing all calculated crop dimensions and timings.
+        output_path: The file path where the generated short should be saved.
+        max_error_depth: Ignored parameter retained for backwards compatibility or isolated retries.
+
+    Raises:
+        Exception: If FFmpeg child process terminates unexpectedly or pipe streaming fails.
+    """
 
     logger.info(f"Rendering GPU: {output_path.name}")
 

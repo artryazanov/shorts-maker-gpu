@@ -3,7 +3,23 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class ProcessingConfig(BaseSettings):
-    """Configuration values used throughout the processing pipeline."""
+    """Configuration values used throughout the processing pipeline.
+    
+    This Pydantic settings model manages all parameters required for video processing,
+    including crop aspect ratios, scene generation limits, and timing boundaries for
+    the generated short clips. Values can be loaded from environment variables or a `.env` file.
+
+    Attributes:
+        target_ratio_w (int): Target width for the final crop aspect ratio.
+        target_ratio_h (int): Target height for the final crop aspect ratio.
+        scene_limit (int): Maximum number of top scenes to render from a single video.
+        x_center (float): Horizontal center point for the crop (0.0=left, 1.0=right).
+        y_center (float): Vertical center point for the crop (0.0=top, 1.0=bottom).
+        max_error_depth (int): Maximum number of retries if GPU rendering fails.
+        min_short_length (int): Minimum permissible duration (in seconds) for a generated short.
+        max_short_length (int): Maximum permissible duration (in seconds) for a generated short.
+        max_combined_scene_length (int): Maximum permitted length for a contiguous block of action.
+    """
 
     target_ratio_w: int = Field(default=1, description="Target aspect ratio width")
     target_ratio_h: int = Field(default=1, description="Target aspect ratio height")

@@ -12,28 +12,49 @@ from shorts_maker.io.streamer import GPUVideoStreamer
 
 
 class _SecondsTime:
-    """Lightweight stand-in for scene time objects using seconds."""
+    """Lightweight stand-in for scene time objects using seconds.
+
+    Acts as a wrapper for time values to maintain compatibility with legacy 
+    or external scene detection logic without importing heavy dependencies.
+
+    Attributes:
+        _seconds (float): The exact time in seconds.
+    """
 
     def __init__(self, seconds: float):
         self._seconds = float(seconds)
 
     def get_seconds(self) -> float:
+        """Returns the time in seconds."""
         return self._seconds
 
     def get_timecode(self) -> str:
+        """Returns the time formatted as a string with two decimal places."""
         return f"{self._seconds:.2f}"
 
     def get_frames(self) -> int:
+        """Converts seconds to frames assuming a fixed 30 FPS target."""
         return int(self._seconds * 30)
 
 
 def detect_video_scenes_gpu(
     video_path: Path | str, threshold: float = 27.0
 ) -> List[Tuple[_SecondsTime, _SecondsTime]]:
-    """Detect scenes matching PySceneDetect ContentDetector, but with GPU-assisted I/O.
+    """Detects scene changes in a video using GPU-accelerated I/O.
 
-    This implementation replicates scenedetect.detectors.ContentDetector (v0.6.7)
-    semantics to produce identical scene cuts.
+    This implementation replicates the exact semantics of PySceneDetect's 
+    ContentDetector (v0.6.7) to produce identical scene cuts, but leverages 
+    VPF (GPUVideoStreamer) for drastically faster frame extraction and resizing.
+    It calculates the mean absolute difference between adjacent frames in HSV space.
+
+    Args:
+        video_path: Path to the input video file.
+        threshold: The threshold for the frame score to trigger a scene cut.
+            Higher values require more visual change to trigger a cut.
+
+    Returns:
+        A list of tuples, where each tuple represents a scene containing 
+        the start time and end time as `_SecondsTime` objects.
     """
     
     # 1) Determine original size, compute SceneDetect-like downscale factor.
@@ -183,8 +204,23 @@ def scene_action_score(
     w_audio: float = 0.6,
     w_video: float = 0.4,
 ) -> float:
-    """Return total (summed) action score within the scene."""
+    """Calculates the total integrated action score for a given scene.
 
+    Integrates the combined audio and video action scores over the duration 
+    of the scene to determine how "interesting" or action-packed the scene is.
+
+    Args:
+        scene: Tuple representing (start_time, end_time).
+        audio_times: Array of timestamps for audio scores.
+        audio_score: Array of computed audio action scores.
+        video_times: Array of timestamps for video scores (optional).
+        video_score: Array of computed video action scores (optional).
+        w_audio: Weight modifier for the audio score (default: 0.6).
+        w_video: Weight modifier for the video score (default: 0.4).
+
+    Returns:
+        The total sum of action scores falling within the scene boundaries.
+    """
     start_sec = scene[0].get_seconds()
     end_sec = scene[1].get_seconds()
 
@@ -215,8 +251,7 @@ def _best_window_single(
     times: np.ndarray,
     score: np.ndarray,
 ) -> float:
-    """Helper to find best window on a single profile."""
-
+    """Internal helper to find the optimal start point using a single action profile."""
     start_sec = float(scene[0].get_seconds())
     end_sec = float(scene[1].get_seconds())
 
@@ -265,8 +300,25 @@ def best_action_window_start(
     w_audio: float = 0.6,
     w_video: float = 0.4,
 ) -> float:
-    """Find the start of the window inside the scene maximizing combined action."""
+    """Finds the optimal starting point for a clip inside a long scene.
 
+    Uses a sliding window approach over the combined audio/video action signals
+    to maximize the amount of action captured within the requested window length.
+    Automatically interpolates video scores to match the higher frequency audio timeline.
+
+    Args:
+        scene: Tuple representing the full scene boundaries.
+        window_length: Desired duration of the final short clip (in seconds).
+        audio_times: Timestamps of audio features.
+        audio_score: Values of audio features.
+        video_times: Timestamps of video features.
+        video_score: Values of video features.
+        w_audio: Weight given to audio action.
+        w_video: Weight given to video action.
+
+    Returns:
+        The optimal timestamp (in seconds) to start the clip.
+    """
     if (
         video_times is None
         or video_score is None
@@ -324,8 +376,18 @@ def best_action_window_start(
 def combine_scenes(
     scene_list: Sequence[Tuple[_SecondsTime, _SecondsTime]], config: ProcessingConfig
 ) -> List[Tuple[_SecondsTime, _SecondsTime]]:
-    """Combine adjacent scenes while preserving content."""
+    """Merges fragmented, adjacent micro-scenes into cohesive segments.
 
+    Prevents the generation of overly fragmented clips by combining consecutive 
+    scenes that fall below the `min_short_length` threshold defined in the config.
+
+    Args:
+        scene_list: Raw sequence of detected scenes.
+        config: Settings controlling minimum and maximum scene lengths.
+
+    Returns:
+        A condensed list of scene boundaries.
+    """
     if not scene_list:
         return []
 
@@ -410,7 +472,18 @@ def combine_scenes(
 def split_overlong_scenes(
     combined_scene_list: List[Tuple[_SecondsTime, _SecondsTime]], config: ProcessingConfig
 ) -> List[Tuple[_SecondsTime, _SecondsTime]]:
-    """Split scenes longer than 4 * max_short_length into n equal parts."""
+    """Splits extremely long scenes into manageable, equally-sized chunks.
+
+    Prevents the rendering pipeline from becoming overwhelmed by scenes that 
+    vastly exceed the targeted maximum short length.
+
+    Args:
+        combined_scene_list: List of merged scenes.
+        config: Settings controlling the maximum allowed scene length.
+
+    Returns:
+        A flattened list where overlong scenes have been subdivided.
+    """
     result: List[Tuple[_SecondsTime, _SecondsTime]] = []
     threshold = 4 * config.max_short_length
     for scene in combined_scene_list:
@@ -443,10 +516,22 @@ def find_smart_end_point(
     scores: np.ndarray,
     search_window: float = 2.0,
 ) -> float:
-    """
-    Search for the best end point (with minimal action/volume)
-    in the range [max_end - search_window, max_end].
-    If no good point is found, returns max_end.
+    """Finds the most natural point to end a clip, avoiding mid-action cuts.
+
+    Searches backwards from the absolute maximum end time within a specified 
+    search window to find a local minimum in the action score (e.g., a moment of silence 
+    or stillness), ensuring the clip doesn't cut off abruptly during an important event.
+
+    Args:
+        start_time: The locked starting time of the clip.
+        min_end: The earliest allowed end time to ensure minimum clip duration.
+        max_end: The absolute latest allowed end time.
+        times: Array of timestamps corresponding to the score.
+        scores: Array of action scores (typically audio or combined).
+        search_window: How many seconds backwards from `max_end` to look for a quiet moment.
+
+    Returns:
+        The optimal ending timestamp (in seconds).
     """
     search_start = max(min_end, max_end - search_window)
     search_finish = max_end
