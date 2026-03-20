@@ -29,3 +29,4 @@ packages = ["src/shorts_maker"]
 [tool.mypy]
 strict = true
 ignore_missing_imports = true
+warn_unused_ignores = false

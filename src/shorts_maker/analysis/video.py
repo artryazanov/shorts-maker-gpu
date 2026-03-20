@@ -12,7 +12,7 @@ from shorts_maker.io.streamer import GPUVideoStreamer
 logger = logging.getLogger(__name__)
 
 
-@torch.no_grad()
+@torch.no_grad()  # type: ignore
 def compute_video_action_profile(
     video_path: Path,
     fps: int = 6,

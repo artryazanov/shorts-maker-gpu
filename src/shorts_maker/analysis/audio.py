@@ -10,7 +10,7 @@ from tqdm import tqdm
 logger = logging.getLogger(__name__)
 
 
-@torch.no_grad()
+@torch.no_grad()  # type: ignore
 def compute_audio_action_profile(
     video_path: Path,
     frame_length: int = 2048,

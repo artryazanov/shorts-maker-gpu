@@ -461,7 +461,7 @@ def render_video_gpu(
             # Final memory sweep
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
-                torch.cuda.ipc_collect()  # type: ignore[no-untyped-call]
+                torch.cuda.ipc_collect()  # type: ignore
             gc.collect()
 
 
