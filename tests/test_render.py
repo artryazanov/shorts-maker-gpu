@@ -4,8 +4,8 @@ from unittest import mock
 
 import tests.mock_gpu  # noqa: F401
 sys.path.append(str(Path(__file__).resolve().parent.parent))
-import shorts  # noqa: E402
-from shorts import ProcessingConfig  # noqa: E402
+import shorts_maker as shorts  # noqa: E402
+from shorts_maker.config import ProcessingConfig  # noqa: E402
 
 def test_select_background_resolution():
     assert shorts.select_background_resolution(800) == (720, 1280)
@@ -15,7 +15,7 @@ def test_select_background_resolution():
     assert shorts.select_background_resolution(2000) == (1800, 3200)
     assert shorts.select_background_resolution(3000) == (2160, 3840)
 
-@mock.patch("shorts.nvc.PyFFmpegDemuxer")
+@mock.patch("shorts_maker.utils.scenes.nvc.PyFFmpegDemuxer")
 def test_get_render_params_landscape(mock_dmx):
     config = ProcessingConfig(target_ratio_w=9, target_ratio_h=16)
     
@@ -39,7 +39,7 @@ def test_get_render_params_landscape(mock_dmx):
     # crop_w (608) < crop_h (1080).
     # crop_w / 9 (67) < crop_h / 16 (67.5). So is_vertical_bg is True based on the logic!
 
-@mock.patch("shorts.nvc.PyFFmpegDemuxer")
+@mock.patch("shorts_maker.utils.scenes.nvc.PyFFmpegDemuxer")
 def test_get_render_params_portrait(mock_dmx):
     config = ProcessingConfig(target_ratio_w=9, target_ratio_h=16)
     
@@ -58,7 +58,7 @@ def test_get_render_params_portrait(mock_dmx):
     assert params.crop_h == 1920
     assert params.crop_w == 1080
 
-@mock.patch("shorts.multiprocessing.get_context")
+@mock.patch("shorts_maker.utils.scenes.multiprocessing.get_context")
 def test_render_video_gpu_isolated(mock_get_context):
     mock_ctx = mock.MagicMock()
     mock_proc = mock.MagicMock()
@@ -72,10 +72,10 @@ def test_render_video_gpu_isolated(mock_get_context):
     mock_proc.start.assert_called_once()
     mock_proc.join.assert_called_once()
 
-@mock.patch("shorts.GPUVideoStreamer")
-@mock.patch("shorts.nvc.PyFFmpegDemuxer")
-@mock.patch("shorts.subprocess.Popen")
-@mock.patch("shorts.subprocess.run")
+@mock.patch("shorts_maker.io.streamer.GPUVideoStreamer")
+@mock.patch("shorts_maker.utils.scenes.nvc.PyFFmpegDemuxer")
+@mock.patch("shorts_maker.utils.scenes.subprocess.Popen")
+@mock.patch("shorts_maker.utils.scenes.subprocess.run")
 def test_render_video_gpu(mock_run, mock_popen, mock_dmx, mock_streamer, tmp_path):
     config = ProcessingConfig()
     

@@ -13,7 +13,7 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 import tests.mock_gpu  # noqa: F401, E402
-from shorts import (  # noqa: E402
+from shorts_maker.utils.scenes import (  # noqa: E402
     combine_scenes,
     select_background_resolution,
     ProcessingConfig,
@@ -69,7 +69,7 @@ def test_compute_video_action_profile_sequential():
     mock_streamer_instance.total_frames = 32
 
     from unittest import mock
-    with mock.patch("shorts.GPUVideoStreamer", return_value=mock_streamer_instance):
+    with mock.patch("shorts_maker.io.streamer.GPUVideoStreamer", return_value=mock_streamer_instance):
         times, scores = compute_video_action_profile(Path("dummy.mp4"), fps=6)
 
         assert mock_streamer_instance.stream_batches.called

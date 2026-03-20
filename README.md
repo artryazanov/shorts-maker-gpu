@@ -1,6 +1,6 @@
 # Shorts Maker (GPU Optimized)
 
-Shorts Maker generates vertical video clips from longer gameplay footage. The script detects scenes, computes audio and video action profiles (sound intensity + visual motion), and combines them to rank scenes by overall intensity. It then crops to the desired aspect ratio and renders ready‑to‑upload shorts.
+Shorts Maker generates vertical video clips from longer gameplay footage. This Python library and CLI tool detects scenes, computes audio and video action profiles (sound intensity + visual motion), and combines them to rank scenes by overall intensity. It then crops to the desired aspect ratio and renders ready‑to‑upload shorts.
 
 **This version has been heavily optimized for NVIDIA GPUs using CUDA.**
 
@@ -43,7 +43,7 @@ For the original CPU-only version, please visit [Shorts Maker](https://github.co
 - FFmpeg (used for audio extraction and NVENC encoding).
 - System libraries: `libgl1`, `libglib2.0-0` (often needed for vision libraries).
 
-Python dependencies (see `requirements.txt`):
+Python dependencies (see `pyproject.toml`):
 - `torch`, `torchaudio` (with CUDA support)
 - `PyNvCodec`, `PytorchNvCodec` (Video Processing Framework)
 
@@ -55,12 +55,12 @@ Ensure you have the NVIDIA drivers and CUDA toolkit installed.
 
 ```bash
 git clone https://github.com/artryazanov/shorts-maker-gpu.git
-cd shorts-maker
+cd shorts-maker-gpu
 python3 -m venv venv
 source venv/bin/activate
 
-# Install dependencies (ensure pip picks up the CUDA versions for torch/cupy)
-pip install -r requirements.txt
+# Install the library and its dependencies
+pip install -e .
 ```
 
 If you encounter issues with PyTorch not finding the GPU, refer to its installation guide for your specific CUDA version.
@@ -68,10 +68,15 @@ If you encounter issues with PyTorch not finding the GPU, refer to its installat
 ## Usage
 
 1. Place source videos inside the `gameplay/` directory.
-2. Run the script:
+2. Run the CLI tool:
 
 ```bash
-python shorts.py
+shorts-maker process
+```
+
+You can optionally customize the input and output directories and scene limits:
+```bash
+shorts-maker process --input-dir my_videos/ --output-dir my_shorts/ --scene-limit 3
 ```
 
 3. Generated clips are written to the `generated/` directory.

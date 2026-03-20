@@ -75,8 +75,8 @@ class FakeTensor:
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 import tests.mock_gpu  # noqa: F401, E402
-import shorts  # noqa: E402
-from shorts import compute_audio_action_profile  # noqa: E402
+import shorts_maker as shorts  # noqa: E402
+from shorts_maker.analysis.audio import compute_audio_action_profile  # noqa: E402
 
 def test_compute_audio_action_profile_load_failure():
     shorts.torchaudio.load.side_effect = Exception("Failed")

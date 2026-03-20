@@ -30,10 +30,8 @@ ENV LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:/usr/local/cuda/lib64:$LD_LIBRARY_
 # 3. NVIDIA MAGIC: Allow pass-through of video libraries (NVENC/NVDEC) from the host at runtime
 ENV NVIDIA_DRIVER_CAPABILITIES=compute,video,utility
 
-# 4. Install Python dependencies
-COPY requirements.txt requirements.txt
-RUN pip install --break-system-packages --no-cache-dir --upgrade pip "setuptools<70.0.0" wheel scikit-build ninja && \
-    pip install --break-system-packages --no-cache-dir -r requirements.txt
+# 4. Install toolchain
+RUN pip install --break-system-packages --no-cache-dir --upgrade pip "setuptools<70.0.0" wheel scikit-build ninja hatchling
 
 # 5. BUILD BLOCK: Install drivers -> Build VPF -> Remove drivers (ALL IN ONE LAYER)
 # This guarantees that the hardcoded driver version (550) is used only for linking
@@ -73,5 +71,6 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/* /tmp/nv-codec-headers /tmp/VPF
 
 COPY . .
+RUN pip install --break-system-packages .
 
-CMD ["python", "shorts.py"]
+CMD ["shorts-maker"]

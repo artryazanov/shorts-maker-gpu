@@ -5,10 +5,10 @@ from unittest import mock
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 import tests.mock_gpu  # noqa: F401
-from shorts import detect_video_scenes_gpu  # noqa: E402
+from shorts_maker.utils.scenes import detect_video_scenes_gpu  # noqa: E402
 
-@mock.patch("shorts.GPUVideoStreamer")
-@mock.patch("shorts.nvc.PyFFmpegDemuxer")
+@mock.patch("shorts_maker.io.streamer.GPUVideoStreamer")
+@mock.patch("shorts_maker.utils.scenes.nvc.PyFFmpegDemuxer")
 def test_detect_video_scenes_empty_video(mock_dmx, mock_streamer):
     """Test scene detection when video has 0 frames."""
     mock_dmx_instance = mock.MagicMock()
@@ -27,8 +27,8 @@ def test_detect_video_scenes_empty_video(mock_dmx, mock_streamer):
     scenes = detect_video_scenes_gpu(Path("dummy.mp4"))
     assert len(scenes) == 0
 
-@mock.patch("shorts.GPUVideoStreamer")
-@mock.patch("shorts.nvc.PyFFmpegDemuxer")
+@mock.patch("shorts_maker.io.streamer.GPUVideoStreamer")
+@mock.patch("shorts_maker.utils.scenes.nvc.PyFFmpegDemuxer")
 def test_detect_video_scenes_no_cuts(mock_dmx, mock_streamer):
     """Test scene detection when no cuts exist."""
     mock_dmx_instance = mock.MagicMock()
@@ -79,8 +79,8 @@ def test_detect_video_scenes_no_cuts(mock_dmx, mock_streamer):
     
     assert len(scenes) == 0
 
-@mock.patch("shorts.GPUVideoStreamer")
-@mock.patch("shorts.nvc.PyFFmpegDemuxer")
+@mock.patch("shorts_maker.io.streamer.GPUVideoStreamer")
+@mock.patch("shorts_maker.utils.scenes.nvc.PyFFmpegDemuxer")
 def test_detect_video_scenes_with_cuts(mock_dmx, mock_streamer):
     """Test scene detection when threshold is exceeded."""
     mock_dmx_instance = mock.MagicMock()

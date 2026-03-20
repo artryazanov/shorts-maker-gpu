@@ -6,8 +6,8 @@ import numpy as np
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 import tests.mock_gpu  # noqa: F401
-import shorts  # noqa: E402
-from shorts import ProcessingConfig, _SecondsTime  # noqa: E402
+import shorts_maker as shorts  # noqa: E402
+from shorts_maker.config import ProcessingConfig, _SecondsTime  # noqa: E402
 
 def test_combine_scenes_empty():
     config = ProcessingConfig()
@@ -43,11 +43,11 @@ def test_split_overlong_scenes():
     assert res[1][0].get_seconds() == 25.0
     assert res[1][1].get_seconds() == 50.0
 
-@mock.patch("shorts.detect_video_scenes_gpu")
-@mock.patch("shorts.compute_audio_action_profile")
-@mock.patch("shorts.compute_video_action_profile")
-@mock.patch("shorts.render_video_gpu_isolated")
-@mock.patch("shorts.get_render_params")
+@mock.patch("shorts_maker.utils.scenes.detect_video_scenes_gpu")
+@mock.patch("shorts_maker.analysis.audio.compute_audio_action_profile")
+@mock.patch("shorts_maker.analysis.video.compute_video_action_profile")
+@mock.patch("shorts_maker.utils.scenes.render_video_gpu_isolated")
+@mock.patch("shorts_maker.utils.scenes.get_render_params")
 def test_process_video(mock_get_params, mock_render, mock_video_action, mock_audio_action, mock_detect, tmp_path):
     config = ProcessingConfig()
     
@@ -63,7 +63,7 @@ def test_process_video(mock_get_params, mock_render, mock_video_action, mock_aud
     dummy_vid.touch() # Create dummy file
     
     # Mock video probe
-    with mock.patch("shorts.nvc.PyFFmpegDemuxer") as mock_dmx:
+    with mock.patch("shorts_maker.utils.scenes.nvc.PyFFmpegDemuxer") as mock_dmx:
         mock_dmx_instance = mock.MagicMock()
         mock_dmx_instance.Numframes.return_value = 150
         mock_dmx_instance.Framerate.return_value = 30.0
@@ -74,8 +74,8 @@ def test_process_video(mock_get_params, mock_render, mock_video_action, mock_aud
     mock_render.assert_called_once()
     mock_get_params.assert_called_once()
 
-@mock.patch("shorts.render_video_gpu_isolated")
-@mock.patch("shorts.get_render_params")
+@mock.patch("shorts_maker.utils.scenes.render_video_gpu_isolated")
+@mock.patch("shorts_maker.utils.scenes.get_render_params")
 def test_process_video_no_scenes(mock_get_params, mock_render, tmp_path):
     """Test the fallback branch where no scenes are detected."""
     config = ProcessingConfig()
@@ -83,10 +83,10 @@ def test_process_video_no_scenes(mock_get_params, mock_render, tmp_path):
     dummy_vid = tmp_path / "dummy.mp4"
     dummy_vid.touch()
 
-    with mock.patch("shorts.detect_video_scenes_gpu", return_value=[]), \
-         mock.patch("shorts.compute_audio_action_profile", return_value=(np.array([]), np.array([]))), \
-         mock.patch("shorts.compute_video_action_profile", return_value=(np.array([]), np.array([]))), \
-         mock.patch("shorts.nvc.PyFFmpegDemuxer") as mock_dmx:
+    with mock.patch("shorts_maker.utils.scenes.detect_video_scenes_gpu", return_value=[]), \
+         mock.patch("shorts_maker.analysis.audio.compute_audio_action_profile", return_value=(np.array([]), np.array([]))), \
+         mock.patch("shorts_maker.analysis.video.compute_video_action_profile", return_value=(np.array([]), np.array([]))), \
+         mock.patch("shorts_maker.utils.scenes.nvc.PyFFmpegDemuxer") as mock_dmx:
         
         mock_dmx_instance = mock.MagicMock()
         mock_dmx_instance.Numframes.return_value = 3000
