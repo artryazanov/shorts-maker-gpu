@@ -91,7 +91,6 @@ def test_render_video_gpu(mock_run, mock_popen, mock_dmx, mock_streamer, tmp_pat
     mock_dmx.return_value = mock_dmx_instance
     
     mock_streamer_instance = mock.MagicMock()
-    mock_batch = tests.mock_gpu.FakeTensor(shape=(4, 10, 10, 3), numel=4*10*10*3)
     mock_streamer_instance.stream_batches.return_value = []
     mock_streamer_context = mock.MagicMock()
     mock_streamer_context.__enter__.return_value = mock_streamer_instance
