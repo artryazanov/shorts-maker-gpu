@@ -44,9 +44,6 @@ plugins:
 
 nav:
   - Home: index.md
-  - Guide:
-    - Installation: guide/installation.md
-    - Quickstart: guide/quickstart.md
   - API Reference:
     - Video Processor: api/processor.md
     - Scene Detection & Analytics: api/analytics.md
