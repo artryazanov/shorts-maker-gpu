@@ -1,4 +1,4 @@
-# Shorts Maker (GPU Optimized)
+# 🎬 Shorts Maker (GPU Optimized)
 
 Shorts Maker generates vertical video clips from longer gameplay footage. This Python library and CLI tool detects scenes, computes audio and video action profiles (sound intensity + visual motion), and combines them to rank scenes by overall intensity. It then crops to the desired aspect ratio and renders ready‑to‑upload shorts.
 
@@ -6,18 +6,20 @@ Shorts Maker generates vertical video clips from longer gameplay footage. This P
 
 For the original CPU-only version, please visit [Shorts Maker](https://github.com/artryazanov/shorts-maker).
 
+[![PyPI](https://img.shields.io/pypi/v/shorts-maker-gpu.svg)](https://pypi.org/project/shorts-maker-gpu/)
 [![Tests](https://github.com/artryazanov/shorts-maker-gpu/actions/workflows/testing.yml/badge.svg)](https://github.com/artryazanov/shorts-maker-gpu/actions/workflows/testing.yml)
 [![Linting](https://github.com/artryazanov/shorts-maker-gpu/actions/workflows/linting.yml/badge.svg)](https://github.com/artryazanov/shorts-maker-gpu/actions/workflows/linting.yml)
 [![codecov](https://codecov.io/gh/artryazanov/shorts-maker-gpu/graph/badge.svg)](https://codecov.io/gh/artryazanov/shorts-maker-gpu)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 ![Python](https://img.shields.io/badge/python-3.12%20%7C%203.13%20%7C%203.14-blue)
-![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=flat&logo=docker&logoColor=white)
 ![PyTorch](https://img.shields.io/badge/PyTorch-%23EE4C2C.svg?style=flat&logo=PyTorch&logoColor=white)
 ![CUDA](https://img.shields.io/badge/CUDA-13.0-green)
+![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=flat&logo=docker&logoColor=white)
 
 ### [Read the Full Documentation 📚](https://artryazanov.github.io/shorts-maker-gpu/)
 
-## Features
+## ✨ Features
 
 - **GPU-Accelerated Processing**:
   - **Hardware Decoding & Resizing**: Native NVIDIA Video Processing Framework (VPF) integration via `PyNvCodec`. Decodes, resizes, and converts color spaces directly on NVDEC.
@@ -37,7 +39,7 @@ For the original CPU-only version, please visit [Shorts Maker](https://github.co
 - Retry logic during rendering to avoid spurious failures.
 - Configuration via `.env` environment variables.
 
-## Requirements
+## 📋 Requirements
 
 - **NVIDIA GPU** with CUDA support.
 - **NVIDIA Drivers** (compatible with CUDA 13.0+ recommended).
@@ -49,9 +51,17 @@ Python dependencies (see `pyproject.toml`):
 - `torch`, `torchaudio` (with CUDA support)
 - `PyNvCodec`, `PytorchNvCodec` (Video Processing Framework)
 
-## Installation
+## 🚀 Installation
 
-### Manual Setup (Linux with CUDA)
+### Via PyPI (Recommended)
+
+Ensure you have the NVIDIA drivers and CUDA toolkit installed. Then install the package directly:
+
+```bash
+pip install shorts-maker-gpu
+```
+
+### Manual Setup from Source (Linux with CUDA)
 
 Ensure you have the NVIDIA drivers and CUDA toolkit installed.
 
@@ -67,7 +77,7 @@ pip install -e .
 
 If you encounter issues with PyTorch not finding the GPU, refer to its installation guide for your specific CUDA version.
 
-## Usage
+## 💡 Usage
 
 1. Place source videos inside the `gameplay/` directory.
 2. Run the CLI tool:
@@ -85,7 +95,7 @@ shorts-maker process --input-dir my_videos/ --output-dir my_shorts/ --scene-limi
 
 During processing, the log shows an action score for each combined scene and the final list sorted by that score. The top scenes (by action intensity) are rendered first using NVENC.
 
-## Docker (Recommended)
+## 🐳 Docker (Recommended)
 
 The easiest way to run this application is using Docker with the NVIDIA Container Toolkit.
 
@@ -107,7 +117,7 @@ docker run --rm \
 
 Note the `--gpus all` flag, which is essential for the application to access hardware acceleration.
 
-## Configuration
+## ⚙️ Configuration
 
 Copy `.env.example` to `.env` and adjust values as needed.
 
@@ -122,7 +132,7 @@ Supported variables (defaults shown):
 - `MAX_SHORT_LENGTH=179` — Maximum short length in seconds.
 - `MAX_COMBINED_SCENE_LENGTH=300` — Maximum combined length (in seconds).
 
-## Development
+## 🛠️ Development
 
 ### Linting
 
@@ -133,7 +143,7 @@ pip install ruff
 ruff check .
 ```
 
-## Running Tests
+## 🧪 Running Tests
 
 Unit tests live in the `tests/` folder. Run them with:
 
@@ -143,11 +153,11 @@ pytest -q
 
 Note: The tests are designed to mock GPU availability if it is missing, so they can run in standard CI environments.
 
-## Troubleshooting
+## 🚑 Troubleshooting
 
 - **"Torch not installed" / "CUDA not available"**: Ensure you are running inside the Docker container with `--gpus all` or have the correct CUDA toolkit installed locally.
 - **NVENC Error**: If `h264_nvenc` fails, the script attempts to fall back to software encoding (`libx264`). Check if your GPU supports NVENC and if the drivers are up to date.
 
-## License
+## 📄 License
 
 This project is released under the [MIT License](LICENSE).
