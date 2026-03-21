@@ -1,0 +1,49 @@
+name: Publish to PyPI
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  pypi-publish:
+    name: Build and publish to PyPI
+    runs-on: ubuntu-latest
+    
+    permissions:
+      id-token: write   # Обязательно для аутентификации в PyPI через OIDC (Trusted Publishing)
+      contents: write   # Обязательно для коммита обновленного pyproject.toml обратно в репозиторий
+      
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          
+      - name: Update pyproject.toml version and commit
+        run: |
+          # Убираем префикс 'v' из тега (например, v1.0.0 -> 1.0.0)
+          VERSION=${GITHUB_REF_NAME#v}
+          # Автоматически обновляем поле version в pyproject.toml
+          sed -i -e "s/^version = \".*\"/version = \"$VERSION\"/" pyproject.toml
+          
+          git config --local user.name "github-actions[bot]"
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add pyproject.toml
+          git commit -m "chore: update version to ${GITHUB_REF_NAME#v}" || echo "No changes to commit"
+        
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          
+      - name: Install build dependencies
+        run: python -m pip install build
+        
+      - name: Build package (sdist and wheel)
+        run: python -m build
+        
+      - name: Publish package to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+      - name: Push version update to main
+        run: git push origin HEAD:main
