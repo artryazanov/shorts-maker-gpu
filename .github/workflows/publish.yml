@@ -10,8 +10,8 @@ jobs:
     runs-on: ubuntu-latest
     
     permissions:
-      id-token: write   # Обязательно для аутентификации в PyPI через OIDC (Trusted Publishing)
-      contents: write   # Обязательно для коммита обновленного pyproject.toml обратно в репозиторий
+      id-token: write   # Required for PyPI authentication via OIDC (Trusted Publishing)
+      contents: write   # Required to commit the updated pyproject.toml back to the repository
       
     steps:
       - name: Checkout repository
@@ -21,9 +21,9 @@ jobs:
           
       - name: Update pyproject.toml version and commit
         run: |
-          # Убираем префикс 'v' из тега (например, v1.0.0 -> 1.0.0)
+          # Remove 'v' prefix from tag (e.g., v1.0.0 -> 1.0.0)
           VERSION=${GITHUB_REF_NAME#v}
-          # Автоматически обновляем поле version в pyproject.toml
+          # Automatically update the version field in pyproject.toml
           sed -i -e "s/^version = \".*\"/version = \"$VERSION\"/" pyproject.toml
           
           git config --local user.name "github-actions[bot]"
