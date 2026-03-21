@@ -75,42 +75,42 @@ class FakeTensor:
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 import tests.mock_gpu  # noqa: F401, E402
-import shorts  # noqa: E402
-from shorts import compute_audio_action_profile  # noqa: E402
+import shorts_maker as shorts  # noqa: E402
+from shorts_maker.analysis.audio import compute_audio_action_profile  # noqa: E402
 
 def test_compute_audio_action_profile_load_failure():
-    shorts.torchaudio.load.side_effect = Exception("Failed")
+    shorts.analysis.audio.torchaudio.load.side_effect = Exception("Failed")
     t, s = compute_audio_action_profile(Path("dummy.mp4"))
     assert len(t) == 0
     assert len(s) == 0
 
 def test_compute_audio_action_profile_success():
-    shorts.torchaudio.load.side_effect = None
+    shorts.analysis.audio.torchaudio.load.side_effect = None
     
     waveform = FakeTensor(shape=(2, 48000), numel=96000)
-    shorts.torchaudio.load.return_value = (waveform, 48000)
+    shorts.analysis.audio.torchaudio.load.return_value = (waveform, 48000)
     
-    shorts.torch.mean.return_value = FakeTensor(shape=(1, 48000), numel=48000)
-    shorts.torch.sqrt.return_value = FakeTensor(shape=(100,), numel=100)
-    shorts.torch.cat.side_effect = lambda x, **kwargs: x[0] if x else FakeTensor(shape=(0,), numel=0)
-    shorts.torch.abs.return_value = FakeTensor(shape=(100,), numel=100)
-    shorts.torch.sum.return_value = FakeTensor(shape=(100,), numel=100)
-    shorts.torch.zeros.return_value = FakeTensor(shape=(1025,), numel=1025)
-    shorts.torch.ones.return_value = FakeTensor(shape=(21,), numel=21)
-    shorts.torch.arange.return_value = FakeTensor(shape=(100,), numel=100)
-    shorts.torch.hann_window.return_value = FakeTensor(shape=(2048,), numel=2048)
+    shorts.analysis.audio.torch.mean.return_value = FakeTensor(shape=(1, 48000), numel=48000)
+    shorts.analysis.audio.torch.sqrt.return_value = FakeTensor(shape=(100,), numel=100)
+    shorts.analysis.audio.torch.cat.side_effect = lambda x, **kwargs: x[0] if x else FakeTensor(shape=(0,), numel=0)
+    shorts.analysis.audio.torch.abs.return_value = FakeTensor(shape=(100,), numel=100)
+    shorts.analysis.audio.torch.sum.return_value = FakeTensor(shape=(100,), numel=100)
+    shorts.analysis.audio.torch.zeros.return_value = FakeTensor(shape=(1025,), numel=1025)
+    shorts.analysis.audio.torch.ones.return_value = FakeTensor(shape=(21,), numel=21)
+    shorts.analysis.audio.torch.arange.return_value = FakeTensor(shape=(100,), numel=100)
+    shorts.analysis.audio.torch.hann_window.return_value = FakeTensor(shape=(2048,), numel=2048)
     
     def pad_mock(tensor, pad, **kwargs):
         return FakeTensor(shape=(1, tensor.shape[1] + pad[0] + pad[1]), numel=tensor.numel() + pad[0] + pad[1])
-    shorts.torch.nn.functional = mock.MagicMock()
-    shorts.torch.nn.functional.pad.side_effect = pad_mock
+    shorts.analysis.audio.torch.nn.functional = mock.MagicMock()
+    shorts.analysis.audio.torch.nn.functional.pad.side_effect = pad_mock
     
     def conv1d_mock(*args, **kwargs):
         return FakeTensor(shape=(100,), numel=100)
-    shorts.torch.nn.functional.conv1d.side_effect = conv1d_mock
+    shorts.analysis.audio.torch.nn.functional.conv1d.side_effect = conv1d_mock
     
     times, score = compute_audio_action_profile(Path("dummy.mp4"), frame_length=2048, hop_length=512)
     
     assert len(times) == 100
     assert len(score) == 100
-    shorts.torchaudio.load.assert_called()
+    shorts.analysis.audio.torchaudio.load.assert_called()

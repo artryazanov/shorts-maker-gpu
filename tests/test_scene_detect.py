@@ -5,93 +5,107 @@ from unittest import mock
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 import tests.mock_gpu  # noqa: F401
-import shorts  # noqa: E402
-from shorts import detect_video_scenes_gpu  # noqa: E402
+from shorts_maker.utils.scenes import detect_video_scenes_gpu  # noqa: E402
 
-def test_detect_video_scenes_empty_video():
+@mock.patch("shorts_maker.utils.scenes.GPUVideoStreamer")
+@mock.patch("shorts_maker.utils.scenes.nvc.PyFFmpegDemuxer")
+def test_detect_video_scenes_empty_video(mock_dmx, mock_streamer):
     """Test scene detection when video has 0 frames."""
-    mock_vr = mock.MagicMock()
-    mock_vr.__len__.return_value = 0
-    mock_vr.get_avg_fps.return_value = 30.0
-    mock_vr.__getitem__.return_value.shape = (1080, 1920, 3)
+    mock_dmx_instance = mock.MagicMock()
+    mock_dmx_instance.Width.return_value = 1920
+    mock_dmx_instance.Height.return_value = 1080
+    mock_dmx_instance.Framerate.return_value = 30.0
+    mock_dmx_instance.Numframes.return_value = 0
+    mock_dmx.return_value = mock_dmx_instance
     
-    shorts.VideoReader = mock.MagicMock(return_value=mock_vr)
+    mock_streamer_instance = mock.MagicMock()
+    mock_streamer_instance.stream_batches.return_value = []
+    mock_streamer_context = mock.MagicMock()
+    mock_streamer_context.__enter__.return_value = mock_streamer_instance
+    mock_streamer.return_value = mock_streamer_context
     
     scenes = detect_video_scenes_gpu(Path("dummy.mp4"))
     assert len(scenes) == 0
 
-def test_detect_video_scenes_no_cuts():
+@mock.patch("shorts_maker.utils.scenes.GPUVideoStreamer")
+@mock.patch("shorts_maker.utils.scenes.nvc.PyFFmpegDemuxer")
+def test_detect_video_scenes_no_cuts(mock_dmx, mock_streamer):
     """Test scene detection when no cuts exist."""
-    mock_vr = mock.MagicMock()
-    mock_vr.__len__.return_value = 60 # 60 frames = 2 seconds at 30fps
-    mock_vr.get_avg_fps.return_value = 30.0
-    mock_vr.__getitem__.return_value.shape = (1080, 1920, 3)
+    mock_dmx_instance = mock.MagicMock()
+    mock_dmx_instance.Width.return_value = 1920
+    mock_dmx_instance.Height.return_value = 1080
+    mock_dmx_instance.Framerate.return_value = 30.0
+    mock_dmx_instance.Numframes.return_value = 60
+    mock_dmx.return_value = mock_dmx_instance
     
     class FakeFramesTensor:
-        def detach(self): return self
-        def to(self, _): return self
+        def __init__(self, size):
+            self.size = size
+        def cpu(self): return self
         def numpy(self):
             import numpy as np
             # Return identical gray frames (no scene changes)
-            return np.ones((16, 256, 144, 3), dtype=np.uint8) * 128
+            return np.ones((self.size, 256, 144, 3), dtype=np.uint8) * 128
             
-    mock_vr.get_batch.return_value = FakeFramesTensor()
-    
-    shorts.VideoReader = mock.MagicMock(return_value=mock_vr)
-    
-    import numpy as np
-    
-    cv2_mock = mock.MagicMock()
-    def dummy_cvt(img, mode):
-        return np.ones_like(img) * 10
-    cv2_mock.cvtColor.side_effect = dummy_cvt
-    cv2_mock.COLOR_BGR2HSV = 40
-    
-    def dummy_split(hsv):
-        h = np.ones((hsv.shape[0], hsv.shape[1]), dtype=np.uint8) * 10
-        s = np.ones((hsv.shape[0], hsv.shape[1]), dtype=np.uint8) * 50
-        v = np.ones((hsv.shape[0], hsv.shape[1]), dtype=np.uint8) * 100
-        return h, s, v
-    cv2_mock.split.side_effect = dummy_split
-    
-    sys.modules["cv2"] = cv2_mock
+    mock_streamer_instance = mock.MagicMock()
+    mock_streamer_instance.stream_batches.return_value = [
+        (FakeFramesTensor(16), list(range(16))),
+        (FakeFramesTensor(16), list(range(16, 32))),
+        (FakeFramesTensor(16), list(range(32, 48))),
+        (FakeFramesTensor(12), list(range(48, 60))),
+    ]
+    mock_streamer_context = mock.MagicMock()
+    mock_streamer_context.__enter__.return_value = mock_streamer_instance
+    mock_streamer.return_value = mock_streamer_context
     
     scenes = detect_video_scenes_gpu(Path("dummy.mp4"), threshold=27.0)
     
     assert len(scenes) == 0
 
-def test_detect_video_scenes_with_cuts():
+@mock.patch("shorts_maker.utils.scenes.cv2")
+@mock.patch("shorts_maker.utils.scenes.GPUVideoStreamer")
+@mock.patch("shorts_maker.utils.scenes.nvc.PyFFmpegDemuxer")
+def test_detect_video_scenes_with_cuts(mock_dmx, mock_streamer, mock_cv2):
     """Test scene detection when threshold is exceeded."""
-    mock_vr = mock.MagicMock()
-    mock_vr.__len__.return_value = 100 # ~3 seconds
-    mock_vr.get_avg_fps.return_value = 30.0
-    mock_vr.__getitem__.return_value.shape = (1080, 1920, 3)
+    mock_dmx_instance = mock.MagicMock()
+    mock_dmx_instance.Width.return_value = 1920
+    mock_dmx_instance.Height.return_value = 1080
+    mock_dmx_instance.Framerate.return_value = 30.0
+    mock_dmx_instance.Numframes.return_value = 100
+    mock_dmx.return_value = mock_dmx_instance
     
     class FakeFramesTensor:
-        def detach(self): return self
-        def to(self, _): return self
+        def __init__(self, size):
+            self.size = size
+        def cpu(self): return self
         def numpy(self):
             import numpy as np
-            return np.ones((1, 256, 144, 3), dtype=np.uint8) * 128
+            return np.ones((self.size, 256, 144, 3), dtype=np.uint8) * 128
             
-    mock_vr.get_batch.return_value = FakeFramesTensor()
-    shorts.VideoReader = mock.MagicMock(return_value=mock_vr)
+    mock_streamer_instance = mock.MagicMock()
+    batches = []
+    for i in range(0, 100, 16):
+        end = min(100, i + 16)
+        batches.append((FakeFramesTensor(end - i), list(range(i, end))))
+    mock_streamer_instance.stream_batches.return_value = batches
+    
+    mock_streamer_context = mock.MagicMock()
+    mock_streamer_context.__enter__.return_value = mock_streamer_instance
+    mock_streamer.return_value = mock_streamer_context
     
     import numpy as np
-    cv2_mock = mock.MagicMock()
-    cv2_mock.COLOR_BGR2HSV = 40
-    
     call_count = [0]
+    
     def dummy_split(hsv):
         call_count[0] += 1
-        val = 10 if call_count[0] % 2 == 0 else 200
+        val = 10 if (call_count[0] // 20) % 2 == 0 else 200
         h = np.ones((10, 10), dtype=np.uint8) * val
         return h, h, h
-        
-    cv2_mock.split.side_effect = dummy_split
-    cv2_mock.cvtColor.side_effect = lambda img, mode: img
-    sys.modules["cv2"] = cv2_mock
-    
+
+    mock_cv2.split.side_effect = dummy_split
+    mock_cv2.cvtColor.side_effect = lambda img, mode: img
+    mock_cv2.COLOR_BGR2HSV = 40
+
     scenes = detect_video_scenes_gpu(Path("dummy.mp4"), threshold=1.0) 
     
     assert len(scenes) > 1
