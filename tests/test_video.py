@@ -1,7 +1,6 @@
 import sys
 from pathlib import Path
 from unittest import mock
-import numpy as np
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 

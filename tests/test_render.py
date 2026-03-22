@@ -144,7 +144,6 @@ def test_log_memory_usage(mock_logger):
 @mock.patch("shorts_maker.io.render.subprocess.run")
 def test_render_video_gpu_with_frames(mock_run, mock_popen, mock_dmx, mock_streamer, tmp_path):
     from shorts_maker.io.render import get_render_params, render_video_gpu
-    import torch
     
     config = ProcessingConfig()
     

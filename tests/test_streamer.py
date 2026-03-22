@@ -1,4 +1,3 @@
-import sys
 from unittest.mock import MagicMock, patch
 from unittest import mock
 
@@ -186,11 +185,10 @@ def test_streamer_close_cuda_cache(tmp_path):
     video_path = tmp_path / "test.mp4"
     video_path.touch()
     
-    import torch
     original_avail = torch.cuda.is_available
     torch.cuda.is_available = lambda: True
     try:
-        with GPUVideoStreamer(video_path) as streamer:
+        with GPUVideoStreamer(video_path):
             pass
         torch.cuda.empty_cache.assert_called_once()
     finally:
