@@ -1,12 +1,9 @@
 from unittest.mock import MagicMock, patch
 from unittest import mock
 
-import tests.mock_gpu as mock_gpu
 import pytest
 import PyNvCodec as nvc
 import torch
-import numpy as np
-from pathlib import Path
 
 from shorts_maker.io.streamer import GPUVideoStreamer
 
