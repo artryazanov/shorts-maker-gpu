@@ -52,3 +52,53 @@ def test_best_action_window_start_no_video():
         scene, 2.0, a_times, a_score, None, None
     )
     assert best_start > 0.0
+
+
+def test_best_window_single_edge_cases():
+    scene = (_SecondsTime(float('inf')), _SecondsTime(10.0))
+    assert _best_window_single(scene, 2.0, np.array([]), np.array([])) == float('inf')
+    
+    scene = (_SecondsTime(10.0), _SecondsTime(5.0))
+    assert _best_window_single(scene, 2.0, np.array([]), np.array([])) == 10.0
+
+    scene = (_SecondsTime(0.0), _SecondsTime(10.0))
+    # max_allowed_start <= start_sec (window = 20)
+    assert _best_window_single(scene, 20.0, np.array([]), np.array([])) == 0.0
+
+    # no data in mask
+    assert _best_window_single(scene, 2.0, np.array([-5.0, -1.0]), np.array([0, 0])) == 0.0
+
+    # len < 2
+    assert _best_window_single(scene, 2.0, np.array([5.0]), np.array([0])) == 0.0
+
+    # dt <= 0 (same times)
+    assert _best_window_single(scene, 2.0, np.array([5.0, 5.0]), np.array([0, 0])) == 0.0
+
+    # len(s_seg) < n_win
+    times = np.array([1.0, 1.1, 1.2])
+    score = np.array([0, 0, 0])
+    # window_length = 5.0 -> n_win = 5.0 / 0.1 = 50
+    assert _best_window_single(scene, 5.0, times, score) == 0.0
+
+def test_best_action_window_start_edge_cases():
+    scene = (_SecondsTime(float('inf')), _SecondsTime(10.0))
+    assert best_action_window_start(scene, 2.0, np.array([1.0, 2.0]), np.array([0, 0]), np.array([1.0, 2.0]), np.array([0, 0])) == float('inf')
+
+    scene = (_SecondsTime(0.0), _SecondsTime(10.0))
+    # no audio data in mask
+    assert best_action_window_start(scene, 2.0, np.array([-5.0, -1.0]), np.array([0, 0]), np.array([1.0, 2.0]), np.array([0, 0])) == 1.0 # falls back to video
+    
+    # len audio < 2
+    assert best_action_window_start(scene, 2.0, np.array([5.0]), np.array([0]), np.array([1.0, 2.0]), np.array([0, 0])) == 1.0 # falls back to video
+    
+    # dt <= 0
+    assert best_action_window_start(scene, 2.0, np.array([5.0, 5.0]), np.array([0, 0]), np.array([1.0, 2.0]), np.array([0, 0])) == 0.0
+    
+    # window > duration
+    assert best_action_window_start(scene, 20.0, np.array([1.0, 2.0, 3.0]), np.array([0, 0, 0]), np.array([1.0, 2.0]), np.array([0, 0])) == 0.0
+    
+    # len < n_win
+    times = np.array([1.0, 1.1, 1.2])
+    score = np.array([0, 0, 0])
+    assert best_action_window_start(scene, 5.0, times, score, np.array([1.0, 2.0]), np.array([0, 0])) == 0.0
+

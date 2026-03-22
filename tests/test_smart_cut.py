@@ -98,3 +98,12 @@ def test_find_smart_end_point_constrained_min_end():
     )
     
     assert res == 12.0
+
+
+def test_find_smart_end_point_edge_cases():
+    # search_finish <= search_start
+    times = np.array([1.0, 2.0])
+    scores = np.array([1.0, 2.0])
+    # max_end = 2.0, min_end = 3.0 -> search_start = max(3.0, ...), search_finish = 2.0 => <=
+    assert find_smart_end_point(0.0, 3.0, 2.0, times, scores) == 2.0
+

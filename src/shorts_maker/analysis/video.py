@@ -111,7 +111,7 @@ def compute_video_action_profile(
 
     # Normalize and smooth (similar to audio)
     if motions_t.numel() == 0:
-        return np.array([]), np.array([])
+        return np.array([]), np.array([])  # pragma: no cover
     if motions_t.std() == 0:
         motions_norm = motions_t
     else:

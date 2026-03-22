@@ -102,7 +102,7 @@ def test_compute_audio_action_profile_success():
     
     def pad_mock(tensor, pad, **kwargs):
         return FakeTensor(shape=(1, tensor.shape[1] + pad[0] + pad[1]), numel=tensor.numel() + pad[0] + pad[1])
-    shorts.analysis.audio.torch.nn.functional = mock.MagicMock()
+    # Don't overwrite functional namespace here
     shorts.analysis.audio.torch.nn.functional.pad.side_effect = pad_mock
     
     def conv1d_mock(*args, **kwargs):
@@ -114,3 +114,36 @@ def test_compute_audio_action_profile_success():
     assert len(times) == 100
     assert len(score) == 100
     shorts.analysis.audio.torchaudio.load.assert_called()
+
+@mock.patch("subprocess.run")
+@mock.patch("wave.open")
+def test_audio_fallback_success(mock_wave_open, mock_sub_run):
+    shorts.analysis.audio.torchaudio.info.side_effect = Exception("Failed native info")
+    
+    # Mock fallback success
+    mock_wf = mock.MagicMock()
+    mock_wf.getframerate.return_value = 44100
+    mock_wf.getnframes.return_value = 88200  # 2 seconds
+    mock_wf.readframes.side_effect = [b'\x01\x00' * 44100, b'\x02\x00' * (44100-200), b'\x03\x00' * 50, b''] 
+    mock_wave_open.return_value = mock_wf
+    
+    def pad_mock(tensor, pad, **kwargs):
+        return FakeTensor(shape=(1, tensor.shape[1] + pad[0] + pad[1]), numel=tensor.numel() + pad[0] + pad[1])
+    shorts.analysis.audio.torch.nn.functional.pad.side_effect = pad_mock
+    shorts.analysis.audio.torch.nn.functional.conv1d.side_effect = lambda *args, **kwargs: FakeTensor(shape=(10,), numel=10)
+    shorts.analysis.audio.torch.mean.return_value = FakeTensor(shape=(1, 44100), numel=44100)
+    shorts.analysis.audio.torch.sqrt.return_value = FakeTensor(shape=(10,), numel=10)
+    
+    t, s = compute_audio_action_profile(Path("dummy.mp4"), frame_length=2048, hop_length=512)
+    mock_sub_run.assert_called_once()
+    mock_wf.close.assert_called()
+    assert len(t) > 0
+
+@mock.patch("subprocess.run")
+def test_audio_fallback_subprocess_error(mock_sub_run):
+    shorts.analysis.audio.torchaudio.info.side_effect = Exception("Failed native info")
+    mock_sub_run.side_effect = Exception("ffmpeg missing")
+    
+    t, s = compute_audio_action_profile(Path("dummy.mp4"))
+    assert len(t) == 0
+    assert len(s) == 0

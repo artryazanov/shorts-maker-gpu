@@ -100,3 +100,49 @@ def test_process_video_no_scenes(mock_get_params, mock_render, tmp_path):
     # Should randomly sample a clip and render
     mock_render.assert_called_once()
     mock_get_params.assert_called_once()
+
+@mock.patch("shorts_maker.core.processor.render_video_gpu_isolated")
+@mock.patch("shorts_maker.core.processor.get_render_params")
+def test_process_video_strategies(mock_get_params, mock_render, tmp_path):
+    """Test the padding/smart crop strategies when scenes are present."""
+    config = ProcessingConfig(max_short_length=15.0, min_short_length=5.0)
+    
+    dummy_vid = tmp_path / "dummy.mp4"
+    dummy_vid.touch()
+
+    # Small scene that fits entirely
+    s1 = [_SecondsTime(0.0), _SecondsTime(5.0)]
+    # Big scene that is too long
+    s2 = [_SecondsTime(20.0), _SecondsTime(40.0)]
+
+    mock_scenes = [s1, s2]
+
+    with mock.patch("shorts_maker.core.processor.detect_video_scenes_gpu", return_value=[]), \
+         mock.patch("shorts_maker.core.processor.compute_audio_action_profile", return_value=(np.array([0.0, 50.0]), np.array([1.0, 1.0]))), \
+         mock.patch("shorts_maker.core.processor.compute_video_action_profile", return_value=(np.array([0.0, 50.0]), np.array([1.0, 1.0]))), \
+         mock.patch("shorts_maker.core.processor.combine_scenes", return_value=mock_scenes), \
+         mock.patch("shorts_maker.core.processor.split_overlong_scenes", return_value=mock_scenes), \
+         mock.patch("shorts_maker.core.processor.best_action_window_start", return_value=20.0), \
+         mock.patch("shorts_maker.core.processor.find_smart_end_point", return_value=30.0), \
+         mock.patch("shorts_maker.core.processor.nvc.PyFFmpegDemuxer") as mock_dmx:
+        
+        mock_dmx_instance = mock.MagicMock()
+        mock_dmx_instance.Numframes.return_value = 1500
+        mock_dmx_instance.Framerate.return_value = 30.0
+        mock_dmx.return_value = mock_dmx_instance
+        
+        VideoProcessor(config).process_video(dummy_vid, tmp_path)
+    
+    assert mock_render.call_count == 2
+    assert mock_get_params.call_count == 2
+    
+    # Check the first call parameters (Strategy 1)
+    # The padding algorithm adds 1.5s padding to the 5.0s scene = 6.5 duration
+    first_call_args = mock_get_params.call_args_list[0][0]
+    assert first_call_args[1] == 0.0 # final_start
+    assert first_call_args[2] == 6.5 # final_duration
+    
+    # Check the second call parameters (Strategy 2)
+    second_call_args = mock_get_params.call_args_list[1][0]
+    assert second_call_args[1] == 20.0
+    assert second_call_args[2] == 10.0 # final_end (30) - start (20) = 10

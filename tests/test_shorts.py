@@ -71,3 +71,32 @@ def test_compute_video_action_profile_sequential():
 
         assert mock_streamer_instance.stream_batches.called
         assert isinstance(times, np.ndarray) or (times == [])
+
+
+def test_combine_scenes_exact_max_boundary():
+    config = ProcessingConfig(min_short_length=5, max_short_length=10, max_combined_scene_length=15)
+    # Exact match on is_last_scene = True
+    scenes = [
+        make_scene(0, 3),
+        make_scene(3, 6),
+        make_scene(6, 9),
+        make_scene(9, 12),
+        make_scene(12, 15)  # cumulative = 15
+    ]
+    combined = combine_scenes(scenes, config)
+    assert len(combined) == 1
+    assert combined[0][1].get_seconds() == 12.0
+
+    # Exact match on is_last_scene = False (triggers run_start_idx = i+1)
+    scenes = [
+        make_scene(0, 3),
+        make_scene(3, 6),
+        make_scene(6, 9),
+        make_scene(9, 12),
+        make_scene(12, 15), # cumulative = 15 -> output (0, 15), new starts
+        make_scene(15, 18),
+    ]
+    combined = combine_scenes(scenes, config)
+    assert len(combined) == 1
+    assert combined[0][1].get_seconds() == 15.0
+

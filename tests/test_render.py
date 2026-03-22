@@ -112,3 +112,81 @@ def test_render_video_gpu(mock_run, mock_popen, mock_dmx, mock_streamer, tmp_pat
     mock_popen.assert_called_once()
     mock_process.stdin.close.assert_called_once()
     mock_process.wait.assert_called_once()
+
+def test_blur_gpu():
+    from shorts_maker.io.render import blur_gpu
+    import torch
+    
+    # Create dummy tensor (H, W, C)
+    dummy = torch.ones((10, 10, 3))
+    res = blur_gpu(dummy, sigma=2.0)
+    assert res is not None
+    
+    # Create dummy tensor (N, C, H, W)
+    dummy_nchw = torch.ones((2, 3, 10, 10))
+    res_nchw = blur_gpu(dummy_nchw, sigma=2.0)
+    assert res_nchw is not None
+    
+    # 0 sigma -> returns original
+    res_zero = blur_gpu(dummy, sigma=0)
+    assert res_zero is dummy
+
+@mock.patch("shorts_maker.io.render.logger")
+def test_log_memory_usage(mock_logger):
+    from shorts_maker.io.render import log_memory_usage
+    log_memory_usage("Test")
+    mock_logger.info.assert_called_once()
+    assert "Memory:" in mock_logger.info.call_args[0][0]
+
+@mock.patch("shorts_maker.io.render.GPUVideoStreamer")
+@mock.patch("shorts_maker.io.render.nvc.PyFFmpegDemuxer")
+@mock.patch("shorts_maker.io.render.subprocess.Popen")
+@mock.patch("shorts_maker.io.render.subprocess.run")
+def test_render_video_gpu_with_frames(mock_run, mock_popen, mock_dmx, mock_streamer, tmp_path):
+    from shorts_maker.io.render import get_render_params, render_video_gpu
+    import torch
+    
+    config = ProcessingConfig()
+    
+    mock_dmx_instance = mock.MagicMock()
+    mock_dmx_instance.Width.return_value = 1920
+    mock_dmx_instance.Height.return_value = 1080
+    mock_dmx_instance.Framerate.return_value = 30.0
+    mock_dmx.return_value = mock_dmx_instance
+    
+    mock_streamer_instance = mock.MagicMock()
+    # Mock stream_batches to yield ONE batch of frames
+    fake_frames = tests.mock_gpu.FakeTensor(shape=(4, 1080, 1920, 3))
+    mock_streamer_instance.stream_batches.return_value = [(fake_frames, [0, 1, 2, 3])]
+    mock_streamer_context = mock.MagicMock()
+    mock_streamer_context.__enter__.return_value = mock_streamer_instance
+    mock_streamer.return_value = mock_streamer_context
+
+    params = get_render_params(Path("dummy.mp4"), 0.0, 1.0, config)
+    
+    mock_process = mock.MagicMock()
+    mock_process.poll.return_value = None
+    mock_popen.return_value = mock_process
+    
+    # Mock select to strictly block / allow write
+    with mock.patch("select.select") as mock_select:
+        mock_select.return_value = ([], [mock_process.stdin.fileno()], [])
+        out_path = tmp_path / "out2.mp4"
+        render_video_gpu(params, out_path, save_ffmpeg_logs=True)
+    
+    # It should have written 4 frames (one batch) to the pipe
+    mock_process.stdin.write.assert_called_once()
+
+@mock.patch("shorts_maker.io.render.multiprocessing.get_context")
+def test_render_video_gpu_isolated_error(mock_get_context):
+    from shorts_maker.io.render import render_video_gpu_isolated
+    mock_ctx = mock.MagicMock()
+    mock_proc = mock.MagicMock()
+    mock_proc.exitcode = -9 # OOM
+    mock_ctx.Process.return_value = mock_proc
+    mock_get_context.return_value = mock_ctx
+    
+    # Just calling it passes, log error
+    with mock.patch("shorts_maker.io.render.logger") as mock_logger:
+        render_video_gpu_isolated(None, Path("out.mp4"))
+        assert mock_logger.error.call_count >= 1

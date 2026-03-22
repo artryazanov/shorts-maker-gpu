@@ -13,6 +13,7 @@ class FakeTensor:
     def __init__(self, shape=(100,), numel=100):
         self._shape = shape
         self._numel = numel
+        self.dtype = "float32"
 
     @property
     def shape(self):
@@ -48,22 +49,34 @@ class FakeTensor:
     def cpu(self):
         return self
 
-
-
     def view(self, *args, **kwargs):
-        if args and args[0] == -1:
-            return FakeTensor(shape=(self._numel,), numel=self._numel)
-        return FakeTensor(shape=(len(args),), numel=self._numel)
+        if len(args) == 1 and isinstance(args[0], (tuple, list)):
+            return FakeTensor(shape=args[0], numel=self._numel)
+        return FakeTensor(shape=args, numel=self._numel)
+        
+    def expand(self, *args, **kwargs):
+        if len(args) == 1 and isinstance(args[0], (tuple, list)):
+            return FakeTensor(shape=args[0], numel=self._numel)
+        return FakeTensor(shape=args, numel=self._numel)
         
     def float(self): return self
+    def clone(self): return self
+    def as_strided(self, *args, **kwargs): return self
+
+    def sum(self, *args, **kwargs):
+        return FakeTensor(shape=(1,), numel=1)
 
     def permute(self, *dims):
-        new_shape = tuple(self._shape[d] for d in dims) if self._shape else ()
-        return FakeTensor(shape=new_shape, numel=self._numel)
+        try:
+            new_shape = tuple(self._shape[d] for d in dims) if self._shape else ()
+            if len(new_shape) != len(dims):
+                new_shape = tuple([1] * len(dims))
+            return FakeTensor(shape=new_shape, numel=self._numel)
+        except Exception:
+            return FakeTensor(shape=tuple([1] * len(dims)), numel=self._numel)
         
     def contiguous(self): return self
     def byte(self): return self
-    def clone(self): return self
     
     def numpy(self):
         import numpy as np
@@ -80,7 +93,6 @@ class FakeTensor:
     def __rtruediv__(self, other): return FakeTensor(shape=self._shape, numel=self._numel)
 
     def unfold(self, dimension, size, step):
-        # Dummy unfold that returns a 2D tensor
         n_frames = (self._shape[0] - size) // step + 1 if self._shape else 0
         return FakeTensor(shape=(max(1, n_frames), size), numel=max(1, n_frames) * size)
         
@@ -91,7 +103,7 @@ class FakeTensor:
         return FakeTensor(shape=self._shape, numel=self._numel)
         
     def __setitem__(self, idx, value):
-        pass # Ignore for testing purposes
+        pass
         
     def __len__(self):
         return self._shape[0] if self._shape else 0
@@ -103,6 +115,7 @@ def setup_mocks():
     torch_mock = create_mock_module("torch")
     torch_mock.cuda = create_mock_module("torch.cuda")
     torch_mock.cuda.is_available = lambda: False
+    torch_mock.cuda.empty_cache = mock.MagicMock()
     torch_mock.device = lambda x: "cpu"
     torch_mock.tensor = lambda x, **kwargs: FakeTensor(shape=(len(x),) if isinstance(x, (list, tuple)) else (100,), numel=len(x) if isinstance(x, (list, tuple)) else 100)
     torch_mock.abs = lambda x: FakeTensor(shape=x.shape if hasattr(x, 'shape') else (100,))
@@ -113,10 +126,13 @@ def setup_mocks():
     torch_mock.cat = lambda x, **kwargs: FakeTensor(shape=x[0].shape if hasattr(x[0], 'shape') else (100,)) if isinstance(x, (list, tuple)) and len(x) > 0 else FakeTensor()
     torch_mock.ones = lambda x, **kwargs: FakeTensor(shape=(x,) if isinstance(x, int) else x)
     torch_mock.stack = lambda x, **kwargs: FakeTensor(shape=(len(x),) + x[0].shape if len(x)>0 and hasattr(x[0], 'shape') else (100,))
-    torch_mock.arange = lambda x, **kwargs: FakeTensor(shape=(x,) if isinstance(x, int) else x)
+    torch_mock.arange = lambda *args, **kwargs: FakeTensor(shape=(args[0],) if len(args)==1 else (args[1]-args[0],))
     torch_mock.hann_window = lambda x, **kwargs: FakeTensor(shape=(x,) if isinstance(x, int) else x)
     torch_mock.stft = lambda x, **kwargs: FakeTensor(shape=(1025, 100))
-    torch_mock.from_numpy = lambda x: x
+    torch_mock.exp = lambda x: FakeTensor(shape=x.shape if hasattr(x, 'shape') else (100,))
+    torch_mock.from_numpy = lambda x: FakeTensor(shape=x.shape, numel=x.size)
+    torch_mock.float32 = "float32"
+    torch_mock.float = "float"
     torch_mock.Tensor = FakeTensor
     class DummyNoGrad:
         def __call__(self, func): return func
@@ -132,9 +148,10 @@ def setup_mocks():
     
     torch_mock.nn = create_mock_module("torch.nn")
     torch_mock.nn.functional = create_mock_module("torch.nn.functional")
-    torch_mock.nn.functional.interpolate = mock.MagicMock()
-    torch_mock.nn.functional.pad = mock.MagicMock()
+    torch_mock.nn.functional.interpolate = mock.MagicMock(side_effect=lambda x, *args, **kwargs: FakeTensor(shape=x.shape if hasattr(x, 'shape') else (100,)))
+    torch_mock.nn.functional.pad = mock.MagicMock(side_effect=lambda x, *args, **kwargs: FakeTensor(shape=x.shape if hasattr(x, 'shape') else (100,)))
     torch_mock.nn.functional.conv1d = mock.MagicMock()
+    torch_mock.nn.functional.conv2d = mock.MagicMock(side_effect=lambda x, *args, **kwargs: FakeTensor(shape=x.shape if hasattr(x, 'shape') else (100,)))
     
     sys.modules["torch"] = torch_mock
 
@@ -156,30 +173,42 @@ def setup_mocks():
     nvc_mock.SeekMode.PREV_KEY_FRAME = "PREV_KEY_FRAME"
     
     class MockDemuxer:
-        def __init__(self, *args, **kwargs): pass
-        def Width(self): return 1280
-        def Height(self): return 720
-        def Framerate(self): return 30.0
+        def __init__(self, *args, **kwargs):
+            self.mock_w = 1920
+            self.mock_h = 1080
+            self.mock_fps = 30.0
+            self.mock_fmt = nvc_mock.PixelFormat.RGB
+        def Format(self): return self.mock_fmt
+        def Width(self): return self.mock_w
+        def Height(self): return self.mock_h
+        def Framerate(self): return self.mock_fps
         def Numframes(self): return 1000
-        def Format(self): return "nv12"
-        def Codec(self): return "h264"
-        def DemuxSinglePacket(self, packet): return False
+        def Codec(self): return 0
         def Seek(self, *args, **kwargs): pass
+        def Timebase(self): return 0.01
+        def DemuxSinglePacket(self, packet): return False
+        def LastPacketData(self, pkt_data): pass
     nvc_mock.PyFFmpegDemuxer = MockDemuxer
 
-    nvc_mock.PyNvDecoder = mock.MagicMock()
-    nvc_mock.PySurfaceResizer = mock.MagicMock()
-    nvc_mock.PySurfaceConverter = mock.MagicMock()
+    nvc_mock.PyNvDecoder = mock.MagicMock(side_effect=lambda *args, **kwargs: mock.MagicMock())
+    nvc_mock.PySurfaceResizer = mock.MagicMock(side_effect=lambda *args, **kwargs: mock.MagicMock())
+    nvc_mock.PySurfaceConverter = mock.MagicMock(side_effect=lambda *args, **kwargs: mock.MagicMock())
+    
+    nvc_mock.SeekContext = mock.MagicMock()
+    nvc_mock.PacketData = mock.MagicMock
+    nvc_mock.ColorspaceConversionContext = mock.MagicMock()
+    nvc_mock.ColorSpace = create_mock_module("PyNvCodec.ColorSpace")
+    nvc_mock.ColorSpace.BT_601 = "BT_601"
+    nvc_mock.ColorRange = create_mock_module("PyNvCodec.ColorRange")
+    nvc_mock.ColorRange.MPEG = "MPEG"
     
     nvc_mock.Surface = create_mock_module("PyNvCodec.Surface")
     nvc_mock.Surface.Make = mock.MagicMock()
     sys.modules["PyNvCodec"] = nvc_mock
     
     pnvc_mock = create_mock_module("PytorchNvCodec")
-    pnvc_mock.make_tensor = mock.MagicMock(return_value=FakeTensor(shape=(3, 720, 1280), numel=3*720*1280))
+    pnvc_mock.make_tensor = mock.MagicMock(return_value=FakeTensor(shape=(100,)))
+    pnvc_mock.DptrToTensor = mock.MagicMock(return_value=FakeTensor(shape=(1080, 1920, 3)))
     sys.modules["PytorchNvCodec"] = pnvc_mock
 
-
-
-# Execute it once unconditionally when imported
 setup_mocks()

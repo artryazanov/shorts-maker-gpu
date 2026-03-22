@@ -109,3 +109,24 @@ def test_detect_video_scenes_with_cuts(mock_dmx, mock_streamer, mock_cv2):
     scenes = detect_video_scenes_gpu(Path("dummy.mp4"), threshold=1.0) 
     
     assert len(scenes) > 1
+
+
+@mock.patch("shorts_maker.utils.scenes.GPUVideoStreamer")
+@mock.patch("shorts_maker.utils.scenes.nvc.PyFFmpegDemuxer")
+def test_detect_video_scenes_small_video(mock_dmx, mock_streamer):
+    mock_dmx_instance = mock.MagicMock()
+    mock_dmx_instance.Width.return_value = 200 # < 256
+    mock_dmx_instance.Height.return_value = 200
+    mock_dmx_instance.Framerate.return_value = 30.0
+    mock_dmx_instance.Numframes.return_value = 2
+    mock_dmx.return_value = mock_dmx_instance
+    
+    mock_streamer_instance = mock.MagicMock()
+    mock_streamer_instance.stream_batches.return_value = []
+    mock_streamer_context = mock.MagicMock()
+    mock_streamer_context.__enter__.return_value = mock_streamer_instance
+    mock_streamer.return_value = mock_streamer_context
+    
+    scenes = detect_video_scenes_gpu(Path("dummy.mp4"))
+    assert len(scenes) == 0
+
