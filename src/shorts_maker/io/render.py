@@ -192,6 +192,7 @@ def render_video_gpu(
     params: RenderParams,
     output_path: Path,
     max_error_depth: int = 3,
+    save_ffmpeg_logs: bool = False,
 ) -> None:
     """Renders the final short clip using GPU compositing and FFmpeg NVENC.
 
@@ -294,9 +295,14 @@ def render_video_gpu(
 
     cmd_ffmpeg.extend(["-shortest", str(output_path)])
 
-    # redirect stderr to a file to prevent buffer deadlock
-    log_path = output_path.with_suffix(".ffmpeg.log")
-    ffmpeg_log = open(log_path, "w")
+    # redirect stderr to a file or DEVNULL based on save_ffmpeg_logs
+    ffmpeg_log = None
+    if save_ffmpeg_logs:
+        log_path = output_path.with_suffix(".ffmpeg.log")
+        ffmpeg_log = open(log_path, "w")
+        stderr_dest = ffmpeg_log
+    else:
+        stderr_dest = subprocess.DEVNULL
     
     process = None
 
@@ -305,10 +311,11 @@ def render_video_gpu(
             cmd_ffmpeg,
             stdin=subprocess.PIPE,
             stdout=subprocess.DEVNULL,
-            stderr=ffmpeg_log,
+            stderr=stderr_dest,
         )
     except Exception:
-        ffmpeg_log.close()
+        if ffmpeg_log:
+            ffmpeg_log.close()
         raise
 
     # 3. GPU Rendering Loop

@@ -43,13 +43,46 @@ def compute_audio_action_profile(
     """
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+    import tempfile
+    import subprocess
+    import os
+    import wave
+
+    use_wave_fallback = False
+    temp_dir_obj = None
+    wf = None
+
     try:
         info = torchaudio.info(str(video_path))
         sample_rate = info.sample_rate
         total_samples = info.num_frames
-    except Exception:
-        logger.error(f"Failed to load audio from {video_path}")
-        return np.array([]), np.array([])
+    except Exception as e:
+        logger.warning(f"Native torchaudio failed for {video_path.name}: {e}. Trying ffmpeg+wave fallback...")
+        temp_dir_obj = tempfile.TemporaryDirectory()
+        temp_audio_path = os.path.join(temp_dir_obj.name, "extracted.wav")
+        cmd = [
+            "ffmpeg",
+            "-y",
+            "-i", str(video_path),
+            "-vn",
+            "-acodec", "pcm_s16le",
+            "-ar", "44100",
+            "-ac", "1",
+            temp_audio_path
+        ]
+        try:
+            subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+            wf = wave.open(temp_audio_path, 'rb')
+            sample_rate = wf.getframerate()
+            total_samples = wf.getnframes()
+            use_wave_fallback = True
+        except Exception as fallback_e:
+            logger.error(f"Failed to load audio from {video_path} even with fallback: {fallback_e}")
+            if wf:
+                wf.close()
+            if temp_dir_obj:
+                temp_dir_obj.cleanup()
+            return np.array([]), np.array([])
 
     rms_values = []
     flux_values = []
@@ -75,12 +108,24 @@ def compute_audio_action_profile(
         read_start = max(0, current_frame - overlap_frames)
 
         try:
-            waveform, sr = torchaudio.load(
-                str(video_path),
-                frame_offset=read_start,
-                num_frames=read_count,
-                normalize=True,
-            )
+            if use_wave_fallback:
+                frames_to_read = min(read_count, total_samples - read_start)
+                if frames_to_read <= 0:
+                    break
+                wf.setpos(read_start)
+                raw_bytes = wf.readframes(frames_to_read)
+                if not raw_bytes:
+                    break
+                audio_np = np.frombuffer(raw_bytes, dtype='<i2').astype(np.float32) / 32768.0
+                waveform = torch.from_numpy(audio_np).unsqueeze(0)
+                sr = sample_rate
+            else:
+                waveform, sr = torchaudio.load(
+                    str(video_path),
+                    frame_offset=read_start,
+                    num_frames=read_count,
+                    normalize=True,
+                )
         except Exception:
             logger.error(f"Error reading audio chunk at {read_start}")
             break
@@ -202,5 +247,10 @@ def compute_audio_action_profile(
         if num_frames_out > 0
         else torch.tensor([], device=device)
     )
+
+    if wf:
+        wf.close()
+    if temp_dir_obj:
+        temp_dir_obj.cleanup()
 
     return times.cpu().numpy(), score.cpu().numpy()

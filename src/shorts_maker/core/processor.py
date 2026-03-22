@@ -106,8 +106,7 @@ class VideoProcessor:
                 scene, audio_times, audio_score, video_times, video_score
             )
             logger.info(
-                "    Scene %2d: Duration %5.1f s, ActionScore %7.3f,"
-                " Start %s / Frame %d, End %s / Frame %d",
+                "Scene %2d: Duration %5.1f s, ActionScore %7.3f, Start %s / Frame %d, End %s / Frame %d",
                 i,
                 duration,
                 score_val,
@@ -132,8 +131,7 @@ class VideoProcessor:
                 scene, audio_times, audio_score, video_times, video_score
             )
             logger.info(
-                "    Scene %2d: ActionScore %7.3f, Duration %5.1f s,"
-                " Start %s / Frame %d, End %s / Frame %d",
+                "Scene %2d: ActionScore %7.3f, Duration %5.1f s, Start %s / Frame %d, End %s / Frame %d",
                 i,
                 score_val,
                 duration,
@@ -213,6 +211,7 @@ class VideoProcessor:
                     params,
                     render_path,
                     max_error_depth=self.config.max_error_depth,
+                    save_ffmpeg_logs=self.config.save_ffmpeg_logs,
                 )
         else:
             # No scenes found, fallback to random clip
@@ -245,4 +244,5 @@ class VideoProcessor:
                 params,
                 output_dir / video_file.name,
                 max_error_depth=self.config.max_error_depth,
+                save_ffmpeg_logs=self.config.save_ffmpeg_logs,
             )
