@@ -297,12 +297,11 @@ def render_video_gpu(
 
     # redirect stderr to a file or DEVNULL based on save_ffmpeg_logs
     ffmpeg_log = None
+    stderr_dest: Any = subprocess.DEVNULL
     if save_ffmpeg_logs:
         log_path = output_path.with_suffix(".ffmpeg.log")
         ffmpeg_log = open(log_path, "w")
         stderr_dest = ffmpeg_log
-    else:
-        stderr_dest = subprocess.DEVNULL
     
     process = None
 

@@ -109,6 +109,7 @@ def compute_audio_action_profile(
 
         try:
             if use_wave_fallback:
+                assert wf is not None
                 frames_to_read = min(read_count, total_samples - read_start)
                 if frames_to_read <= 0:
                     break
