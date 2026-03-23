@@ -1,6 +1,4 @@
-"""
-Shorts Maker GPU: A high-performance video processing library.
-"""
+"""Shorts Maker GPU: A high-performance video processing library."""
 import logging
 
 from .config import ProcessingConfig

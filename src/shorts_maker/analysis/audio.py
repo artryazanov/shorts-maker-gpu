@@ -1,3 +1,5 @@
+"""Audio analysis module for computing an action profile based on loudness and spectral flux."""
+
 import logging
 from pathlib import Path
 from typing import Tuple

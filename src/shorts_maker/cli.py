@@ -1,4 +1,7 @@
+"""Command Line Interface for Shorts Maker, orchestrating the entire processing pipeline."""
+
 import logging
+import multiprocessing
 from pathlib import Path
 
 import typer
@@ -8,6 +11,14 @@ from shorts_maker.config import ProcessingConfig
 from shorts_maker.core.processor import VideoProcessor
 
 app = typer.Typer(help="GPU-accelerated shorts generator.")
+
+def _process_video_worker(config: ProcessingConfig, video_file: Path, output_dir: Path) -> None:
+    """Isolated worker for processing a single video.
+
+    Ensures that PyTorch and VPF memory is entirely cleared upon exit.
+    """
+    processor = VideoProcessor(config)
+    processor.process_video(video_file, output_dir)
 
 
 @app.command()
@@ -53,15 +64,27 @@ def process(
         logger.warning(f"No '{input_dir}' directory found. Exiting.")
         raise typer.Exit(code=1)
 
-    processor = VideoProcessor(config)
-
     for video_file in input_dir.iterdir():
         if video_file.is_file() and video_file.suffix.lower() in [
             ".mp4",
             ".mkv",
             ".mov",
         ]:
-            processor.process_video(video_file, output_dir)
+            logger.info(f"\n--- Spawning isolated process for: {video_file.name} ---")
+            
+            # Using 'spawn' guarantees a clean process without inherited CUDA contexts
+            ctx = multiprocessing.get_context("spawn")
+            p = ctx.Process(
+                target=_process_video_worker, 
+                args=(config, video_file, output_dir)
+            )
+            p.start()
+            p.join()
+
+            if p.exitcode != 0:
+                logger.error(f"Processing failed for {video_file.name} with exit code {p.exitcode}")
+                if p.exitcode in (-9, 137):
+                    logger.error("Process was likely OOM killed by Docker/WSL.")
 
 
 if __name__ == "__main__":

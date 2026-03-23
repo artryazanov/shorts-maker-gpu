@@ -26,6 +26,7 @@ For the original CPU-only version, please visit [Shorts Maker](https://github.co
   - **Video Analysis**: Zero-copy GPU memory streaming for stable motion estimation (replaces heavy frame indices).
   - **Image Processing**: Native PyTorch operators used for heavy operations like blurring backgrounds (separable convolutions).
   - **Rendering**: Custom PyTorch+NVENC engine for high-performance rendering (MoviePy removed from render path).
+  - **Robust Batch Processing**: Video processing runs in fully isolated subprocesses, completely clearing CUDA contexts between files to prevent VRAM fragmentation and OOM crashes (especially in Docker/WSL).
 - Audio + video action scoring:
   - Combined ranking with tunable weights (defaults: audio 0.6, video 0.4).
 - Scenes ranked by combined action score rather than duration.

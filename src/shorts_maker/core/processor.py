@@ -1,3 +1,5 @@
+"""Core processing logic to detect scenes, score action, calculate smart boundaries, and trigger rendering."""
+
 import gc
 import logging
 import math

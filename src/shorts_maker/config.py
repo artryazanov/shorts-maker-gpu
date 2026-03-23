@@ -1,3 +1,5 @@
+"""Configuration definitions and loaded settings for the Shorts Maker pipeline."""
+
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 

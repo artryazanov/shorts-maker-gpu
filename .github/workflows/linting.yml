@@ -34,7 +34,9 @@ jobs:
         run: pip install -e .
 
       - name: Run Ruff
-        run: ruff check .
+        run: |
+          ruff check .
+          ruff check --select D --config 'lint.pydocstyle.convention="google"' src/
 
       - name: Run Mypy
         run: mypy src/shorts_maker

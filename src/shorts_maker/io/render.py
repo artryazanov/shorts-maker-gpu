@@ -1,3 +1,5 @@
+"""Rendering pipeline orchestrating PyTorch tensor compositing and FFmpeg NVENC encoding."""
+
 import gc
 import logging
 import math
@@ -62,6 +64,7 @@ class RenderParams:
 
 def blur_gpu(image_tensor: torch.Tensor, sigma: float = 8.0) -> torch.Tensor:
     """Return a blurred version of an image using native PyTorch separable convolutions.
+
     Accepts both (H, W, C) and (N, C, H, W) formats.
     """
     if sigma <= 0:
@@ -125,7 +128,6 @@ def get_render_params(
     config: ProcessingConfig,
 ) -> RenderParams:
     """Calculate all parameters needed for rendering the final clip."""
-
     # Use PyFFmpegDemuxer to get dimensions quickly
     dmx = nvc.PyFFmpegDemuxer(str(video_path))
     w = dmx.Width()
@@ -206,11 +208,11 @@ def render_video_gpu(
         params: RenderParams object containing all calculated crop dimensions and timings.
         output_path: The file path where the generated short should be saved.
         max_error_depth: Ignored parameter retained for backwards compatibility or isolated retries.
+        save_ffmpeg_logs: Whether to save stderr FFmpeg logs to a file alongside the video.
 
     Raises:
         Exception: If FFmpeg child process terminates unexpectedly or pipe streaming fails.
     """
-
     logger.info(f"Rendering GPU: {output_path.name}")
 
     # 1. Fast Extract Audio

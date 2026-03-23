@@ -1,3 +1,5 @@
+"""GPU video streaming and decoding module using PyNvCodec (VPF)."""
+
 from __future__ import annotations
 
 import logging
@@ -140,9 +142,11 @@ class GPUVideoStreamer:
             raise
 
     def __enter__(self) -> "GPUVideoStreamer":
+        """Enters the context manager for GPUVideoStreamer."""
         return self
 
     def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        """Exits the context manager and explicitly frees all VPF and CUDA resources."""
         del self.dec_surface
         del self.nv_cvt
         if getattr(self, "nv_cvt_yuv", None):

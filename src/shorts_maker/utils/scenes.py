@@ -1,3 +1,5 @@
+"""Module for detecting scenes, calculating smart boundaries, and evaluating action density."""
+
 import math
 from pathlib import Path
 from typing import List, Optional, Sequence, Tuple
@@ -56,7 +58,6 @@ def detect_video_scenes_gpu(
         A list of tuples, where each tuple represents a scene containing 
         the start time and end time as `_SecondsTime` objects.
     """
-    
     # 1) Determine original size, compute SceneDetect-like downscale factor.
     dmx = nvc.PyFFmpegDemuxer(str(video_path))
     w0 = dmx.Width()
@@ -175,6 +176,7 @@ def detect_video_scenes_gpu(
                     cut_indices.extend(emitted)
 
             pbar.update(1)
+            del frames_bgr, frames_cpu
 
     pbar.close()
 

@@ -1,3 +1,5 @@
+"""Video analysis module for computing an action profile from frame-by-frame pixel differences."""
+
 import logging
 from pathlib import Path
 from typing import Tuple
@@ -34,7 +36,6 @@ def compute_video_action_profile(
             - times (np.ndarray): Array of timestamps (in seconds) for each evaluated frame.
             - score (np.ndarray): Array of normalized, smoothed action scores.
     """
-
     # 1) Get metadata and calculate dimensions
     try:
         dmx = nvc.PyFFmpegDemuxer(str(video_path))

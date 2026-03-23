@@ -1,3 +1,4 @@
+import tests.mock_gpu  # noqa: F401, E402
 from typer.testing import CliRunner
 from unittest.mock import patch, MagicMock
 
@@ -21,10 +22,25 @@ def test_cli_process_success(tmp_path):
     (input_dir / "video2.mkv").touch()
     (input_dir / "not_video.txt").touch()
 
-    with patch("shorts_maker.cli.VideoProcessor") as mock_vp_class:
+    class FakeProcess:
+        def __init__(self, target, args=(), kwargs=None):
+            self.target = target
+            self.args = args
+            self.kwargs = kwargs or {}
+            self.exitcode = 0
+        def start(self):
+            self.target(*self.args, **self.kwargs)
+        def join(self):
+            pass
+
+    class FakeContext:
+        Process = FakeProcess
+
+    with patch("shorts_maker.cli.VideoProcessor") as mock_vp_class, \
+         patch("multiprocessing.get_context", return_value=FakeContext()):
         mock_processor = MagicMock()
         mock_vp_class.return_value = mock_processor
-        
+
         result = runner.invoke(
             app, 
             ["--input-dir", str(input_dir), "--output-dir", str(output_dir), "--scene-limit", "5"]
