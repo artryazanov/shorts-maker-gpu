@@ -41,10 +41,16 @@ def test_combine_scenes_merges_short_scenes():
         make_scene(13, 18),
     ]
     combined = combine_scenes(scenes, config)
-    assert len(combined) == 1
-    start, end = combined[0]
-    assert start.get_seconds() == 5
-    assert end.get_seconds() == 13
+    assert len(combined) == 3
+    assert combined[0][0].get_seconds() == 0
+    assert combined[0][1].get_seconds() == 5
+    assert combined[1][0].get_seconds() == 5
+    assert combined[1][1].get_seconds() == 11
+    assert combined[2][0].get_seconds() == 11
+    assert combined[2][1].get_seconds() == 18
+
+
+
 
 # render_video (legacy) has been removed.
 # render_video_gpu logic is verified via mocks in separate flows or implicitly here if we add such tests.
@@ -75,28 +81,29 @@ def test_compute_video_action_profile_sequential():
 
 def test_combine_scenes_exact_max_boundary():
     config = ProcessingConfig(min_short_length=5, max_short_length=10, max_combined_scene_length=15)
-    # Exact match on is_last_scene = True
     scenes = [
         make_scene(0, 3),
         make_scene(3, 6),
         make_scene(6, 9),
         make_scene(9, 12),
-        make_scene(12, 15)  # cumulative = 15
+        make_scene(12, 15)
     ]
     combined = combine_scenes(scenes, config)
-    assert len(combined) == 1
-    assert combined[0][1].get_seconds() == 12.0
+    assert len(combined) == 2
+    assert combined[0][1].get_seconds() == 6.0
+    assert combined[1][1].get_seconds() == 15.0
 
-    # Exact match on is_last_scene = False (triggers run_start_idx = i+1)
     scenes = [
         make_scene(0, 3),
         make_scene(3, 6),
         make_scene(6, 9),
         make_scene(9, 12),
-        make_scene(12, 15), # cumulative = 15 -> output (0, 15), new starts
+        make_scene(12, 15),
         make_scene(15, 18),
     ]
     combined = combine_scenes(scenes, config)
-    assert len(combined) == 1
-    assert combined[0][1].get_seconds() == 15.0
+    assert len(combined) == 3
+    assert combined[0][1].get_seconds() == 6.0
+    assert combined[1][1].get_seconds() == 12.0
+    assert combined[2][1].get_seconds() == 18.0
 
