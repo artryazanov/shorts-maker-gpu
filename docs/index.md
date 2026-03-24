@@ -102,6 +102,8 @@ The easiest way to run this application is using Docker with the NVIDIA Containe
 
 Build and run:
 
+*(Note: If the build crashes with a "Segmentation fault" or memory error, limit the CPU cores by using `docker build --cpuset-cpus="0,1" -t shorts-maker .` instead).*
+
 ```bash
 docker build -t shorts-maker .
 
@@ -155,6 +157,11 @@ Note: The tests are designed to mock GPU availability if it is missing, so they 
 
 ## 🚑 Troubleshooting
 
+- **"internal compiler error: Segmentation fault" during `docker build`**: This typically occurs due to an Out-Of-Memory (OOM) error when Docker attempts to compile heavy C++/CUDA libraries (like VPF) using all available CPU cores. To fix this, limit the number of CPU cores used during the build process:
+  ```bash
+  docker build --cpuset-cpus="0,1" -t shorts-maker .
+  ```
+  *(Alternatively, you can increase the RAM limit for Docker/WSL2 in your system settings).*
 - **"Torch not installed" / "CUDA not available"**: Ensure you are running inside the Docker container with `--gpus all` or have the correct CUDA toolkit installed locally.
 - **NVENC Error**: If `h264_nvenc` fails, the script attempts to fall back to software encoding (`libx264`). Check if your GPU supports NVENC and if the drivers are up to date.
 
