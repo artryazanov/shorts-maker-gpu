@@ -395,80 +395,34 @@ def combine_scenes(
     if not scene_list:
         return []
 
-    def is_small(scene: Sequence[_SecondsTime]) -> bool:
-        return (
-            scene[1].get_seconds() - scene[0].get_seconds()
-        ) < config.min_short_length
-
-    n = len(scene_list)
     out: List[Tuple[_SecondsTime, _SecondsTime]] = []
+    current_start = scene_list[0][0]
+    current_end = scene_list[0][1]
 
-    # Initialize first run
-    run_start_idx = 0
-    run_type_small = is_small(scene_list[0])
-    run_start_time = scene_list[0][0]
-    run_end_time = scene_list[0][1]
-
-    for i in range(1, n):
-        current_small = is_small(scene_list[i])
-        if current_small == run_type_small:
-            # Same-type run continues; extend end.
-            run_end_time = scene_list[i][1]
-
-            if run_type_small:
-                run_duration = run_end_time.get_seconds() - run_start_time.get_seconds()
-                if run_duration > config.max_combined_scene_length:
-                    prev_end_time = scene_list[i - 1][1]  # pragma: no cover
-                    out.append((run_start_time, prev_end_time))  # pragma: no cover
-                    run_start_idx = i  # pragma: no cover
-                    run_start_time = scene_list[i][0]  # pragma: no cover
-                    run_end_time = scene_list[i][1]  # pragma: no cover
-                elif run_duration == config.max_combined_scene_length:
-                    is_last_scene = i == n - 1
-                    if is_last_scene:
-                        prev_end_time = scene_list[i - 1][1]
-                        out.append((run_start_time, prev_end_time))
-                        run_start_idx = i
-                        run_start_time = scene_list[i][0]
-                        run_end_time = scene_list[i][1]
-                    else:
-                        out.append((run_start_time, run_end_time))
-                        run_start_idx = i + 1
-                        run_start_time = scene_list[i][1]
-                        run_end_time = scene_list[i][1]
+    for i in range(1, len(scene_list)):
+        duration = current_end.get_seconds() - current_start.get_seconds()
+        
+        # If the accumulated segment is smaller than the minimum, attach the next scene to it
+        if duration < config.min_short_length:
+            current_end = scene_list[i][1]
         else:
-            run_end_idx = i - 1
-            run_duration = run_end_time.get_seconds() - run_start_time.get_seconds()
-            is_boundary = (run_start_idx == 0) or (run_end_idx == n - 1)
-            threshold = (
-                config.middle_short_length
-                if is_boundary
-                else config.min_short_length
-            )
+            # The segment is large enough, save it as a complete scene
+            out.append((current_start, current_end))
+            # Start tracking the new scene
+            current_start = scene_list[i][0]
+            current_end = scene_list[i][1]
 
-            if run_duration >= threshold:
-                out.append((run_start_time, run_end_time))
-                run_start_idx = i
-                run_type_small = current_small
-                run_start_time = scene_list[i][0]
-                run_end_time = scene_list[i][1]
-            else:
-                if is_boundary and run_start_idx == 0:
-                    run_start_idx = i
-                    run_type_small = current_small
-                    run_start_time = scene_list[i][0]
-                    run_end_time = scene_list[i][1]
-                else:
-                    run_type_small = current_small  # pragma: no cover
-                    run_end_time = scene_list[i][1]  # pragma: no cover
-
-    final_duration = run_end_time.get_seconds() - run_start_time.get_seconds()
-    is_boundary = True
-    threshold = (
-        config.middle_short_length if is_boundary else config.min_short_length
-    )
-    if final_duration >= threshold:
-        out.append((run_start_time, run_end_time))
+    # Process the final remaining "tail" segment
+    final_duration = current_end.get_seconds() - current_start.get_seconds()
+    if final_duration >= config.min_short_length:
+        out.append((current_start, current_end))
+    elif out:
+        # If the tail is too short but there were previous scenes - attach it to the last one
+        prev_start, _ = out.pop()
+        out.append((prev_start, current_end))
+    elif final_duration > 0:
+        # If this is the only scene in the entire video and it's short
+        out.append((current_start, current_end))
 
     return out
 

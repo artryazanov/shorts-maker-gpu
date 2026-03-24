@@ -71,7 +71,7 @@ def test_detect_video_scenes_with_cuts(mock_dmx, mock_streamer, mock_cv2):
     mock_dmx_instance.Width.return_value = 1920
     mock_dmx_instance.Height.return_value = 1080
     mock_dmx_instance.Framerate.return_value = 30.0
-    mock_dmx_instance.Numframes.return_value = 100
+    mock_dmx_instance.Numframes.return_value = 150
     mock_dmx.return_value = mock_dmx_instance
     
     class FakeFramesTensor:
@@ -84,8 +84,8 @@ def test_detect_video_scenes_with_cuts(mock_dmx, mock_streamer, mock_cv2):
             
     mock_streamer_instance = mock.MagicMock()
     batches = []
-    for i in range(0, 100, 16):
-        end = min(100, i + 16)
+    for i in range(0, 150, 16):
+        end = min(150, i + 16)
         batches.append((FakeFramesTensor(end - i), list(range(i, end))))
     mock_streamer_instance.stream_batches.return_value = batches
     
@@ -98,7 +98,7 @@ def test_detect_video_scenes_with_cuts(mock_dmx, mock_streamer, mock_cv2):
     
     def dummy_split(hsv):
         call_count[0] += 1
-        val = 10 if (call_count[0] // 20) % 2 == 0 else 200
+        val = 10 if (call_count[0] // 50) % 2 == 0 else 200
         h = np.ones((10, 10), dtype=np.uint8) * val
         return h, h, h
 

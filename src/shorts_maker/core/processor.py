@@ -159,7 +159,7 @@ class VideoProcessor:
         truncated_list = sorted_processed_scene_list[: self.config.scene_limit]
 
         if truncated_list:
-            for i, scene in enumerate(truncated_list):
+            for i, scene in enumerate(truncated_list, start=1):
                 scene_start = scene[0].get_seconds()
                 scene_end = scene[1].get_seconds()
                 scene_duration = scene_end - scene_start
