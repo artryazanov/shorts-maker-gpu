@@ -62,7 +62,7 @@ class VideoProcessor:
         logger.info("\nProcess: %s", video_file.name)
 
         logger.info("Detecting scenes (GPU)...")
-        scene_list = detect_video_scenes_gpu(video_file)
+        scene_list = detect_video_scenes_gpu(video_file, threshold=self.config.scene_threshold)
 
         logger.info("Detected scenes:")
         for i, scene in enumerate(scene_list, start=1):

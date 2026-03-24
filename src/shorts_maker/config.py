@@ -31,6 +31,7 @@ class ProcessingConfig(BaseSettings):
     max_error_depth: int = Field(default=3, description="Maximum error depth for rendering")
     min_short_length: int = Field(default=15, description="Minimum short length in seconds")
     max_short_length: int = Field(default=179, description="Maximum short length in seconds")
+    scene_threshold: float = Field(default=45.0, description="Threshold for scene detection cuts")
     max_combined_scene_length: int = Field(default=300, description="Max allowed combined scene length")
     save_ffmpeg_logs: bool = Field(default=False, description="Whether to save FFmpeg logs during rendering")
     log_level: str = Field(default="WARNING", description="Logging level (e.g., INFO, DEBUG, WARNING)")

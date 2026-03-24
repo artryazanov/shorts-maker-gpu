@@ -131,6 +131,7 @@ Supported variables (defaults shown):
 - `TARGET_RATIO_W=9` — Width part of the target aspect ratio (e.g., 9 for 9:16).
 - `TARGET_RATIO_H=16` — Height part of the target aspect ratio (e.g., 16 for 9:16).
 - `SCENE_LIMIT=4` — Maximum number of top scenes rendered per source video.
+- `SCENE_THRESHOLD=45.0` — Threshold for scene detection cuts.
 - `X_CENTER=0.5` — Horizontal crop center in range [0.0, 1.0].
 - `Y_CENTER=0.5` — Vertical crop center in range [0.0, 1.0].
 - `MAX_ERROR_DEPTH=3` — Maximum retry depth if rendering fails.

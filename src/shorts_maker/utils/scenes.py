@@ -124,7 +124,9 @@ def detect_video_scenes_gpu(
                 self._merge_start = frame_num  # pragma: no cover
             return []  # pragma: no cover
 
-    min_scene_len = 15  # ContentDetector default
+    min_scene_len = int(fps * 1.5)
+    if min_scene_len < 15:
+        min_scene_len = 15
     flash_filter = _FlashFilterMerge(length=min_scene_len)
 
     # 4) Iterate frames, compute HSV components & frame score like ContentDetector
