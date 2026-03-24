@@ -138,6 +138,7 @@ Supported variables (defaults shown):
 - `MAX_SHORT_LENGTH=179` — Maximum short length in seconds.
 - `MAX_COMBINED_SCENE_LENGTH=300` — Maximum combined length (in seconds).
 - `SAVE_FFMPEG_LOGS=False` — Whether to save FFmpeg logs during rendering.
+- `LOG_LEVEL=WARNING` — Logging level (e.g., INFO, DEBUG, WARNING).
 
 ## 🛠️ Development
 

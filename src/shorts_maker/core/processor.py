@@ -64,6 +64,19 @@ class VideoProcessor:
         logger.info("Detecting scenes (GPU)...")
         scene_list = detect_video_scenes_gpu(video_file)
 
+        logger.info("Detected scenes:")
+        for i, scene in enumerate(scene_list, start=1):
+            duration = scene[1].get_seconds() - scene[0].get_seconds()
+            logger.info(
+                "Scene %2d: Duration %5.1f s, Start %s / Frame %d, End %s / Frame %d",
+                i,
+                duration,
+                scene[0].get_timecode(),
+                scene[0].get_frames(),
+                scene[1].get_timecode(),
+                scene[1].get_frames(),
+            )
+
         # Explicitly clear memory
         gc.collect()
         if torch.cuda.is_available():

@@ -33,6 +33,7 @@ class ProcessingConfig(BaseSettings):
     max_short_length: int = Field(default=179, description="Maximum short length in seconds")
     max_combined_scene_length: int = Field(default=300, description="Max allowed combined scene length")
     save_ffmpeg_logs: bool = Field(default=False, description="Whether to save FFmpeg logs during rendering")
+    log_level: str = Field(default="WARNING", description="Logging level (e.g., INFO, DEBUG, WARNING)")
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 

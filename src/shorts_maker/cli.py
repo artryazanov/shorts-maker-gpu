@@ -17,6 +17,13 @@ def _process_video_worker(config: ProcessingConfig, video_file: Path, output_dir
 
     Ensures that PyTorch and VPF memory is entirely cleared upon exit.
     """
+    logging.basicConfig(
+        level=config.log_level,
+        format="%(message)s",
+        datefmt="[%X]",
+        handlers=[RichHandler(rich_tracebacks=True)],
+    )
+
     processor = VideoProcessor(config)
     processor.process_video(video_file, output_dir)
 
@@ -44,17 +51,17 @@ def process(
     Raises:
         typer.Exit: If the provided `input_dir` does not exist or is not a valid directory.
     """
+    config = ProcessingConfig()
+
     # Configure logging for CLI
     logging.basicConfig(
-        level="INFO",
+        level=config.log_level,
         format="%(message)s",
         datefmt="[%X]",
         handlers=[RichHandler(rich_tracebacks=True)],
     )
 
     logger = logging.getLogger("shorts_maker")
-
-    config = ProcessingConfig()
     if scene_limit:
         config.scene_limit = scene_limit
 
