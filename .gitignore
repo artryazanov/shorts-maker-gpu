@@ -23,3 +23,6 @@ dist/
 # Linting and Type Checking Cache
 .ruff_cache/
 .mypy_cache/
+
+# MkDocs
+site/

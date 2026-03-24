@@ -44,8 +44,16 @@ plugins:
 
 nav:
   - Home: index.md
+  - Getting Started:
+    - Installation: getting-started/installation.md
+    - Usage & Docker: getting-started/usage.md
+  - User Guide:
+    - Configuration: user-guide/configuration.md
+    - Troubleshooting: user-guide/troubleshooting.md
   - API Reference:
     - Video Processor: api/processor.md
     - Scene Detection & Analytics: api/analytics.md
     - GPU Video Streamer: api/streamer.md
     - Configuration: api/config.md
+  - Contributing:
+    - Development: contributing/development.md
