@@ -1,3 +1,5 @@
+> 🌐 **Languages:** [English](README.md) | [Русский](README.ru.md) | [ไทย](README.th.md) | [中文](README.zh.md) | [Español](README.es.md) | [العربية](README.ar.md)
+
 # 🎬 Shorts Maker (GPU Optimized)
 
 Shorts Maker generates vertical video clips from longer gameplay footage. This Python library and CLI tool detects scenes, computes audio and video action profiles (sound intensity + visual motion), and combines them to rank scenes by overall intensity. It then crops to the desired aspect ratio and renders ready‑to‑upload shorts.
