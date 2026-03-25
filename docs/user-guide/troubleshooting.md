@@ -22,3 +22,13 @@ If you run into issues using Shorts Maker GPU, refer to these common problems an
     **Error:** Rendering crashes when trying to encode video.
     
     **Solution:** If `h264_nvenc` fails, the script attempts to fall back to software encoding (`libx264`). Check if your GPU natively supports NVENC (some entry-level or mobile GPUs don't) and verify that your NVIDIA drivers are up to date.
+
+!!! failure "WSL Crash / OOM during Docker Run"
+    **Error:** `"WSL integration with distro unexpectedly stopped"` or sudden container crashes during `docker run`.
+    
+    This happens when video processing exhausts the memory (RAM/VRAM) allocated to the WSL2 virtual machine.
+    
+    **Solution:** Limit the number of CPU cores the container uses at runtime to throttle parallel processing, using the `--cpus` flag:
+    ```bash
+    docker run --rm --gpus all --cpus="4.0" -v $(pwd)/gameplay:/app/gameplay -v $(pwd)/generated:/app/generated --env-file .env shorts-maker
+    ```

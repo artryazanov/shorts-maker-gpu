@@ -169,6 +169,10 @@ Note: The tests are designed to mock GPU availability if it is missing, so they 
   docker build --cpuset-cpus="0,1" -t shorts-maker .
   ```
   *(Alternatively, you can increase the RAM limit for Docker/WSL2 in your system settings).*
+- **"WSL integration with distro unexpectedly stopped" / OOM during `docker run`**: Processing high-resolution video can consume significant RAM/VRAM, causing the WSL2 virtual machine to crash due to an Out-Of-Memory (OOM) error. To fix this, limit the number of CPU cores the container can use during execution by adding the `--cpus` flag:
+  ```bash
+  docker run --rm --gpus all --cpus="4.0" -v $(pwd)/gameplay:/app/gameplay -v $(pwd)/generated:/app/generated --env-file .env shorts-maker
+  ```
 - **"Torch not installed" / "CUDA not available"**: Ensure you are running inside the Docker container with `--gpus all` or have the correct CUDA toolkit installed locally.
 - **NVENC Error**: If `h264_nvenc` fails, the script attempts to fall back to software encoding (`libx264`). Check if your GPU supports NVENC and if the drivers are up to date.
 
