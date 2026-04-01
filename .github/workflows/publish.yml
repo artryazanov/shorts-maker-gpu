@@ -32,7 +32,7 @@ jobs:
           git commit -m "chore: update version to ${GITHUB_REF_NAME#v}" || echo "No changes to commit"
         
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           
