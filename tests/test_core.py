@@ -34,16 +34,19 @@ def test_combine_scenes_basic():
 def test_split_overlong_scenes():
     config = ProcessingConfig(max_short_length=10)
     
-    # 50 seconds > 4 * 10 (40) -> splits into 50 / (2*10) = 50 / 20 = 2 parts?
-    # n = math.floor(50 / 20) = 2. parts will be 25s each.
+    # 50 seconds > 2 * 10 (20) -> splits into math.ceil(50 / 15) = 4 parts
     s1 = [_SecondsTime(0.0), _SecondsTime(50.0)]
     
     res = split_overlong_scenes([s1], config)
-    assert len(res) == 2
+    assert len(res) == 4
     assert res[0][0].get_seconds() == 0.0
-    assert res[0][1].get_seconds() == 25.0
-    assert res[1][0].get_seconds() == 25.0
-    assert res[1][1].get_seconds() == 50.0
+    assert res[0][1].get_seconds() == 12.5
+    assert res[1][0].get_seconds() == 12.5
+    assert res[1][1].get_seconds() == 25.0
+    assert res[2][0].get_seconds() == 25.0
+    assert res[2][1].get_seconds() == 37.5
+    assert res[3][0].get_seconds() == 37.5
+    assert res[3][1].get_seconds() == 50.0
 
 @mock.patch("shorts_maker.core.processor.detect_video_scenes_gpu")
 @mock.patch("shorts_maker.core.processor.compute_audio_action_profile")

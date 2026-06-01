@@ -4,6 +4,7 @@ import logging
 from pathlib import Path
 from typing import Tuple
 
+import cv2
 import numpy as np
 import PyNvCodec as nvc
 import torch
@@ -37,9 +38,13 @@ def compute_video_action_profile(
             - score (np.ndarray): Array of normalized, smoothed action scores.
     """
     # 1) Get metadata and calculate dimensions
+    cap = cv2.VideoCapture(str(video_path))
+    cv_fps = cap.get(cv2.CAP_PROP_FPS)
+    cap.release()
+
     try:
         dmx = nvc.PyFFmpegDemuxer(str(video_path))
-        orig_fps = float(dmx.Framerate())
+        orig_fps = cv_fps if (cv_fps > 0 and cv_fps < 240) else float(dmx.Framerate())
         w_new = max(1, dmx.Width() // downscale_factor)
         h_new = max(1, dmx.Height() // downscale_factor)
         del dmx
