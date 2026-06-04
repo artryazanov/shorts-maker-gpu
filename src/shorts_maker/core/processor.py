@@ -104,12 +104,31 @@ class VideoProcessor:
 
         # Pre-calculate video duration for boundary checks
         try:
-            dmx = nvc.PyFFmpegDemuxer(str(video_file))
-            video_duration = float(dmx.Numframes() / dmx.Framerate())
-            del dmx
-        except Exception:  # pragma: no cover
-            logger.warning("PyNvCodec probe failed, fallback to 0 duration.")  # pragma: no cover
-            video_duration = 0.0  # pragma: no cover
+            import subprocess
+            res = subprocess.run(
+                [
+                    "/usr/bin/ffprobe",
+                    "-v",
+                    "error",
+                    "-show_entries",
+                    "format=duration",
+                    "-of",
+                    "default=noprint_wrappers=1:nokey=1",
+                    str(video_file),
+                ],
+                stdout=subprocess.PIPE,
+                text=True,
+                check=True,
+            )
+            video_duration = float(res.stdout.strip())
+        except Exception:
+            try:
+                dmx = nvc.PyFFmpegDemuxer(str(video_file))
+                video_duration = float(dmx.Numframes() / dmx.Framerate())
+                del dmx
+            except Exception:  # pragma: no cover
+                logger.warning("PyNvCodec probe failed, fallback to 0 duration.")  # pragma: no cover
+                video_duration = 0.0  # pragma: no cover
 
         processed_scene_list = combine_scenes(scene_list, self.config)
         processed_scene_list = split_overlong_scenes(processed_scene_list, self.config)
@@ -234,10 +253,13 @@ class VideoProcessor:
                 self.config.min_short_length, self.config.max_short_length
             )
 
-            if video_duration < self.config.max_short_length:
+            if 0 < video_duration < self.config.max_short_length:
                 adapted_short_length = min(math.floor(video_duration), short_length)
             else:
                 adapted_short_length = short_length  # pragma: no cover
+
+            if adapted_short_length <= 0:
+                adapted_short_length = short_length
 
             min_start_point = min(
                 10, math.floor(video_duration) - adapted_short_length

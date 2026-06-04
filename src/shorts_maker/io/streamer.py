@@ -6,6 +6,7 @@ import logging
 from pathlib import Path
 from typing import Any, Iterator, Optional, Tuple
 
+import cv2
 import numpy as np
 import PyNvCodec as nvc
 import PytorchNvCodec as pnvc
@@ -58,7 +59,15 @@ class GPUVideoStreamer:
         
         self.src_w = self.nv_dmx.Width()
         self.src_h = self.nv_dmx.Height()
-        self.fps = self.nv_dmx.Framerate()
+        
+        cap = cv2.VideoCapture(self.video_path)
+        cv_fps = cap.get(cv2.CAP_PROP_FPS)
+        cap.release()
+        
+        if cv_fps > 0 and cv_fps < 240:
+            self.fps = cv_fps
+        else:
+            self.fps = self.nv_dmx.Framerate()
         self.total_frames = self.nv_dmx.Numframes()
 
         try:
@@ -276,7 +285,7 @@ class GPUVideoStreamer:
                     batch_frames.clear()
                     batch_indices.clear()
                     frames_yielded += batch_size
-                    if max_frames and frames_yielded >= max_frames:
+                    if max_frames is not None and frames_yielded >= max_frames:
                         break
 
             frame_idx += 1

@@ -59,8 +59,9 @@ def test_detect_video_scenes_no_cuts(mock_dmx, mock_streamer):
     mock_streamer.return_value = mock_streamer_context
     
     scenes = detect_video_scenes_gpu(Path("dummy.mp4"), threshold=27.0)
-    
-    assert len(scenes) == 0
+    assert len(scenes) == 1
+    assert scenes[0][0].get_seconds() == 0.0
+    assert scenes[0][1].get_seconds() == 2.0  # 60 frames / 30 fps
 
 @mock.patch("shorts_maker.utils.scenes.cv2")
 @mock.patch("shorts_maker.utils.scenes.GPUVideoStreamer")
@@ -105,6 +106,7 @@ def test_detect_video_scenes_with_cuts(mock_dmx, mock_streamer, mock_cv2):
     mock_cv2.split.side_effect = dummy_split
     mock_cv2.cvtColor.side_effect = lambda img, mode: img
     mock_cv2.COLOR_BGR2HSV = 40
+    mock_cv2.VideoCapture.return_value.get.return_value = 0.0
 
     scenes = detect_video_scenes_gpu(Path("dummy.mp4"), threshold=1.0) 
     
@@ -128,5 +130,7 @@ def test_detect_video_scenes_small_video(mock_dmx, mock_streamer):
     mock_streamer.return_value = mock_streamer_context
     
     scenes = detect_video_scenes_gpu(Path("dummy.mp4"))
-    assert len(scenes) == 0
+    assert len(scenes) == 1
+    assert scenes[0][0].get_seconds() == 0.0
+    assert scenes[0][1].get_seconds() == 2 / 30.0
 

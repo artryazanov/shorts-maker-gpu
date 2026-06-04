@@ -59,10 +59,14 @@ def detect_video_scenes_gpu(
         the start time and end time as `_SecondsTime` objects.
     """
     # 1) Determine original size, compute SceneDetect-like downscale factor.
+    cap = cv2.VideoCapture(str(video_path))
+    cv_fps = cap.get(cv2.CAP_PROP_FPS)
+    cap.release()
+
     dmx = nvc.PyFFmpegDemuxer(str(video_path))
     w0 = dmx.Width()
     h0 = dmx.Height()
-    fps = dmx.Framerate()
+    fps = cv_fps if (cv_fps > 0 and cv_fps < 240) else dmx.Framerate()
     frame_count = dmx.Numframes()
     del dmx
 
@@ -136,6 +140,7 @@ def detect_video_scenes_gpu(
 
     last_hsv: Optional[Tuple[np.ndarray, np.ndarray, np.ndarray]] = None
     cut_indices: List[int] = []
+    last_frame_processed = 0
 
     with GPUVideoStreamer(
         video_path,
@@ -144,6 +149,8 @@ def detect_video_scenes_gpu(
         pix_fmt=nvc.PixelFormat.BGR,
     ) as streamer:
         for frames_bgr, batch_indices in streamer.stream_batches(batch_size=batch_size):
+            if batch_indices:
+                last_frame_processed = max(last_frame_processed, batch_indices[-1])
             frames_cpu = frames_bgr.cpu().numpy()
 
             # Process each frame sequentially to exactly match CPU semantics
@@ -182,8 +189,10 @@ def detect_video_scenes_gpu(
 
     pbar.close()
 
+    actual_frame_count = max(frame_count, last_frame_processed + 1)
+
     if not cut_indices:
-        return []
+        return [(_SecondsTime(0.0), _SecondsTime(actual_frame_count / fps))]
 
     cut_indices = sorted(set(cut_indices))
     scenes: List[Tuple[_SecondsTime, _SecondsTime]] = []
@@ -193,8 +202,8 @@ def detect_video_scenes_gpu(
         end_time = cut / fps
         scenes.append((_SecondsTime(start_time), _SecondsTime(end_time)))
         last_cut = cut
-    # Last scene from last cut to end_pos (= frame_count, exclusive)
-    scenes.append((_SecondsTime(last_cut / fps), _SecondsTime(frame_count / fps)))
+    # Last scene from last cut to end_pos (= actual_frame_count, exclusive)
+    scenes.append((_SecondsTime(last_cut / fps), _SecondsTime(actual_frame_count / fps)))
 
     return scenes
 
@@ -443,14 +452,14 @@ def split_overlong_scenes(
         A flattened list where overlong scenes have been subdivided.
     """
     result: List[Tuple[_SecondsTime, _SecondsTime]] = []
-    threshold = 4 * config.max_short_length
+    threshold = 2.0 * config.max_short_length
     for scene in combined_scene_list:
         start_s = scene[0].get_seconds()
         end_s = scene[1].get_seconds()
         duration = end_s - start_s
 
         if duration > threshold:
-            n = int(math.floor(duration / (2 * config.max_short_length)))
+            n = int(math.ceil(duration / (1.5 * config.max_short_length)))
             if n <= 1:  # pragma: no cover
                 result.append(scene)  # pragma: no cover
                 continue  # pragma: no cover
