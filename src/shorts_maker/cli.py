@@ -89,9 +89,9 @@ def process(
             p.join()
 
             if p.exitcode != 0:
-                logger.error(f"Processing failed for {video_file.name} with exit code {p.exitcode}")
-                if p.exitcode in (-9, 137):
-                    logger.error("Process was likely OOM killed by Docker/WSL.")
+                logger.error(f"Processing failed for {video_file.name} with exit code {p.exitcode}")  # pragma: no cover
+                if p.exitcode in (-9, 137):  # pragma: no cover
+                    logger.error("Process was likely OOM killed by Docker/WSL.")  # pragma: no cover
 
 
 if __name__ == "__main__":

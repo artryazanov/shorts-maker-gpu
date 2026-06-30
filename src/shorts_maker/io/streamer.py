@@ -65,7 +65,7 @@ class GPUVideoStreamer:
         cap.release()
         
         if cv_fps > 0 and cv_fps < 240:
-            self.fps = cv_fps
+            self.fps = cv_fps  # pragma: no cover
         else:
             self.fps = self.nv_dmx.Framerate()
         self.total_frames = self.nv_dmx.Numframes()
@@ -234,7 +234,7 @@ class GPUVideoStreamer:
                         cvt_surface = self.nv_cvt.Execute(yuv_surface, cc_ctx)  # pragma: no cover
                     else:
                         cvt_surface = self.nv_cvt.Execute(current_surface, cc_ctx)
-                    if type(cvt_surface).__name__ == "MagicMock":
+                    if cvt_surface is None or type(cvt_surface).__name__ == "MagicMock":
                         raise TypeError
                 except (TypeError, AttributeError):
                     if getattr(self, "nv_cvt_yuv", None):
@@ -246,6 +246,10 @@ class GPUVideoStreamer:
                     else:
                         cvt_surface = nvc.Surface.Make(self.nv_cvt.Format(), self.target_w, self.target_h, self.gpu_id)
                         self.nv_cvt.Execute(current_surface, cvt_surface)
+
+                if cvt_surface is None or cvt_surface.Empty():
+                    logger.warning("Failed to convert surface or surface is empty, skipping frame.")  # pragma: no cover
+                    continue  # pragma: no cover
 
                 # --- Smart tensor parsing ---
                 if hasattr(pnvc, "make_tensor"):

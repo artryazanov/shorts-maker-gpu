@@ -190,9 +190,15 @@ def setup_mocks():
         def LastPacketData(self, pkt_data): pass
     nvc_mock.PyFFmpegDemuxer = MockDemuxer
 
-    nvc_mock.PyNvDecoder = mock.MagicMock(side_effect=lambda *args, **kwargs: mock.MagicMock())
-    nvc_mock.PySurfaceResizer = mock.MagicMock(side_effect=lambda *args, **kwargs: mock.MagicMock())
-    nvc_mock.PySurfaceConverter = mock.MagicMock(side_effect=lambda *args, **kwargs: mock.MagicMock())
+    def make_surf_mock(*args, **kwargs):
+        m = mock.MagicMock()
+        m.Execute.return_value = mock.MagicMock()
+        m.Execute.return_value.Empty.return_value = False
+        return m
+
+    nvc_mock.PyNvDecoder = mock.MagicMock(side_effect=make_surf_mock)
+    nvc_mock.PySurfaceResizer = mock.MagicMock(side_effect=make_surf_mock)
+    nvc_mock.PySurfaceConverter = mock.MagicMock(side_effect=make_surf_mock)
     
     nvc_mock.SeekContext = mock.MagicMock()
     nvc_mock.PacketData = mock.MagicMock
@@ -203,7 +209,11 @@ def setup_mocks():
     nvc_mock.ColorRange.MPEG = "MPEG"
     
     nvc_mock.Surface = create_mock_module("PyNvCodec.Surface")
-    nvc_mock.Surface.Make = mock.MagicMock()
+    def make_surface(*args, **kwargs):
+        m = mock.MagicMock()
+        m.Empty.return_value = False
+        return m
+    nvc_mock.Surface.Make = mock.MagicMock(side_effect=make_surface)
     sys.modules["PyNvCodec"] = nvc_mock
     
     pnvc_mock = create_mock_module("PytorchNvCodec")

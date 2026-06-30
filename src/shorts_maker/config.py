@@ -23,9 +23,9 @@ class ProcessingConfig(BaseSettings):
         max_combined_scene_length (int): Maximum permitted length for a contiguous block of action.
     """
 
-    target_ratio_w: int = Field(default=1, description="Target aspect ratio width")
-    target_ratio_h: int = Field(default=1, description="Target aspect ratio height")
-    scene_limit: int = Field(default=6, description="Maximum scenes to render")
+    target_ratio_w: int = Field(default=9, description="Target aspect ratio width")
+    target_ratio_h: int = Field(default=16, description="Target aspect ratio height")
+    scene_limit: int = Field(default=4, description="Maximum scenes to render")
     x_center: float = Field(default=0.5, description="Horizontal center position (0.0 to 1.0)")
     y_center: float = Field(default=0.5, description="Vertical center position (0.0 to 1.0)")
     max_error_depth: int = Field(default=3, description="Maximum error depth for rendering")

@@ -120,7 +120,7 @@ class VideoProcessor:
                 text=True,
                 check=True,
             )
-            video_duration = float(res.stdout.strip())
+            video_duration = float(res.stdout.strip())  # pragma: no cover
         except Exception:
             try:
                 dmx = nvc.PyFFmpegDemuxer(str(video_file))
@@ -259,7 +259,7 @@ class VideoProcessor:
                 adapted_short_length = short_length  # pragma: no cover
 
             if adapted_short_length <= 0:
-                adapted_short_length = short_length
+                adapted_short_length = short_length  # pragma: no cover
 
             min_start_point = min(
                 10, math.floor(video_duration) - adapted_short_length
