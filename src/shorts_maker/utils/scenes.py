@@ -203,7 +203,7 @@ def detect_video_scenes_gpu(
     
     # We use index_to_time to get the EXACT real time of the cuts
     # If the exact index isn't in the dict (e.g. 0 before streaming started), fallback to frame/fps
-    def _get_time(idx):
+    def _get_time(idx: int) -> float:
         return index_to_time.get(idx, idx / fps)
         
     for cut in cut_indices:
