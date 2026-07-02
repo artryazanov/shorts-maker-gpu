@@ -49,7 +49,7 @@ def test_compute_video_action_profile_zero_std(mock_streamer, mock_dmx):
     mock_streamer_inst.total_frames = 5
     # Provide exactly 1 batch so std() can be 0 (if FakeTensor returns fixed stats)
     tf = FakeTensor(shape=(1, 1080, 1920, 3))
-    mock_streamer_inst.stream_batches.return_value = [(tf, [0])]
+    mock_streamer_inst.stream_batches.return_value = [(tf, [0], [0.0])]
     
     mock_ctx = mock.MagicMock()
     mock_ctx.__enter__.return_value = mock_streamer_inst

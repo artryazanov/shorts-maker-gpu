@@ -141,6 +141,7 @@ def detect_video_scenes_gpu(
     last_hsv: Optional[Tuple[np.ndarray, np.ndarray, np.ndarray]] = None
     cut_indices: List[int] = []
     last_frame_processed = 0
+    index_to_time = {}
 
     with GPUVideoStreamer(
         video_path,
@@ -148,7 +149,7 @@ def detect_video_scenes_gpu(
         target_height=h_eff,
         pix_fmt=nvc.PixelFormat.BGR,
     ) as streamer:
-        for frames_bgr, batch_indices in streamer.stream_batches(batch_size=batch_size):
+        for frames_bgr, batch_indices, batch_timestamps_list in streamer.stream_batches(batch_size=batch_size):
             if batch_indices:
                 last_frame_processed = max(last_frame_processed, batch_indices[-1])
             frames_cpu = frames_bgr.cpu().numpy()
@@ -156,6 +157,8 @@ def detect_video_scenes_gpu(
             # Process each frame sequentially to exactly match CPU semantics
             for j, bgr in enumerate(frames_cpu):
                 frame_num = batch_indices[j]
+                frame_time = batch_timestamps_list[j]
+                index_to_time[frame_num] = frame_time
                 bgr = np.ascontiguousarray(bgr)
 
                 # OpenCV HSV conversion (exact semantics/hue range)
@@ -197,14 +200,20 @@ def detect_video_scenes_gpu(
     cut_indices = sorted(set(cut_indices))
     scenes: List[Tuple[_SecondsTime, _SecondsTime]] = []
     last_cut = 0
+    
+    # We use index_to_time to get the EXACT real time of the cuts
+    # If the exact index isn't in the dict (e.g. 0 before streaming started), fallback to frame/fps
+    def _get_time(idx):
+        return index_to_time.get(idx, idx / fps)
+        
     for cut in cut_indices:
-        start_time = last_cut / fps
-        end_time = cut / fps
+        start_time = _get_time(last_cut)
+        end_time = _get_time(cut)
         scenes.append((_SecondsTime(start_time), _SecondsTime(end_time)))
         last_cut = cut
-    # Last scene from last cut to end_pos (= actual_frame_count, exclusive)
-    scenes.append((_SecondsTime(last_cut / fps), _SecondsTime(actual_frame_count / fps)))
-
+    # Last scene from last cut to end_pos
+    scenes.append((_SecondsTime(_get_time(last_cut)), _SecondsTime(_get_time(actual_frame_count))))
+    
     return scenes
 
 

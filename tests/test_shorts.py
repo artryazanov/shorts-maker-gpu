@@ -50,6 +50,9 @@ def test_combine_scenes_merges_short_scenes():
     assert combined[2][1].get_seconds() == 18
 
 
+    assert combined[2][1].get_seconds() == 18
+
+
 
 
 # render_video (legacy) has been removed.
@@ -64,8 +67,10 @@ def test_compute_video_action_profile_sequential():
     
     # Configure stream_batches to yield a couple of FakeTensors
     def mock_stream_batches(batch_size=16, step=1, max_frames=None):
-        yield tests.mock_gpu.FakeTensor(shape=(batch_size, 64, 64, 3), numel=batch_size*64*64*3), list(range(0, batch_size * step, step))
-        yield tests.mock_gpu.FakeTensor(shape=(batch_size, 64, 64, 3), numel=batch_size*64*64*3), list(range(batch_size * step, batch_size*2 * step, step))
+        indices_1 = list(range(0, batch_size * step, step))
+        yield tests.mock_gpu.FakeTensor(shape=(batch_size, 64, 64, 3), numel=batch_size*64*64*3), indices_1, [float(x)/30.0 for x in indices_1]
+        indices_2 = list(range(batch_size * step, batch_size*2 * step, step))
+        yield tests.mock_gpu.FakeTensor(shape=(batch_size, 64, 64, 3), numel=batch_size*64*64*3), indices_2, [float(x)/30.0 for x in indices_2]
 
     mock_streamer_instance.stream_batches.side_effect = mock_stream_batches
     mock_streamer_instance.__enter__.return_value = mock_streamer_instance

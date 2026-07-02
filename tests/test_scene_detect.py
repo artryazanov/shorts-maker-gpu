@@ -49,10 +49,10 @@ def test_detect_video_scenes_no_cuts(mock_dmx, mock_streamer):
             
     mock_streamer_instance = mock.MagicMock()
     mock_streamer_instance.stream_batches.return_value = [
-        (FakeFramesTensor(16), list(range(16))),
-        (FakeFramesTensor(16), list(range(16, 32))),
-        (FakeFramesTensor(16), list(range(32, 48))),
-        (FakeFramesTensor(12), list(range(48, 60))),
+        (FakeFramesTensor(16), list(range(16)), [x/30.0 for x in range(16)]),
+        (FakeFramesTensor(16), list(range(16, 32)), [x/30.0 for x in range(16, 32)]),
+        (FakeFramesTensor(16), list(range(32, 48)), [x/30.0 for x in range(32, 48)]),
+        (FakeFramesTensor(12), list(range(48, 60)), [x/30.0 for x in range(48, 60)]),
     ]
     mock_streamer_context = mock.MagicMock()
     mock_streamer_context.__enter__.return_value = mock_streamer_instance
@@ -87,7 +87,7 @@ def test_detect_video_scenes_with_cuts(mock_dmx, mock_streamer, mock_cv2):
     batches = []
     for i in range(0, 150, 16):
         end = min(150, i + 16)
-        batches.append((FakeFramesTensor(end - i), list(range(i, end))))
+        batches.append((FakeFramesTensor(end - i), list(range(i, end)), [x/30.0 for x in range(i, end)]))
     mock_streamer_instance.stream_batches.return_value = batches
     
     mock_streamer_context = mock.MagicMock()

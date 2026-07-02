@@ -145,6 +145,9 @@ class GPUVideoStreamer:
                         success = self.nv_dec.DecodeSurfaceFromPacket(packet, self.dec_surface)  # pragma: no cover
                         
                     if success and current_time >= seek_time:
+                        self.first_packet_time = current_time
+                        self.first_packet_valid = True
+                        self.seek_time = seek_time
                         break  # pragma: no cover
         except Exception:
             del self.nv_dmx
@@ -168,51 +171,98 @@ class GPUVideoStreamer:
             torch.cuda.empty_cache()
 
     def stream_batches(
-        self, 
-        batch_size: int = 16, 
-        step: int = 1, 
-        max_frames: Optional[int] = None
-    ) -> Iterator[Tuple[torch.Tensor, list[int]]]:
+        self,
+        batch_size: int = 16,
+        step: int = 1,
+        max_frames: Optional[int] = None,
+        target_fps: Optional[float] = None
+    ) -> Iterator[Tuple[torch.Tensor, list[int], list[float]]]:
         """Yields batches of decoded frames as PyTorch tensors directly in VRAM.
-
+    
         Reads packets from the demuxer, decodes them to GPU surfaces, applies optional
         resizing and color conversion, and exposes the GPU memory as a standard PyTorch
         tensor.
-
+    
         Args:
             batch_size: Number of frames to include in each yielded batch.
             step: Frame skip interval (e.g., step=2 processes every second frame).
             max_frames: Maximum number of frames to yield before stopping.
-
+            target_fps: If set, selectively drops frames to match the target framerate.
+    
         Yields:
             A tuple containing:
                 - frames (torch.Tensor): A batch of frames on the GPU with shape (N, H, W, 3).
                 - indices (list[int]): Global frame indices corresponding to the yielded batch.
+                - timestamps (list[float]): Real presentation timestamps (PTS) in seconds.
         """
         batch_frames = []
         batch_indices = []
+        batch_timestamps = []
         frame_idx = self.start_frame
         frames_yielded = 0
-
+        
+        try:
+            timebase = self.nv_dmx.Timebase()
+        except Exception:
+            timebase = 1.0
+    
+        # Time-based frame dropping logic
+        next_target_time = None
+        target_frame_interval = 1.0 / target_fps if target_fps else 0.0
+        
+        is_first_iteration = getattr(self, "first_packet_valid", False)
+    
         while True:
-            packet = np.ndarray(shape=(0,), dtype=np.uint8)
-            if not self.nv_dmx.DemuxSinglePacket(packet):
-                break
+            if is_first_iteration:
+                packet_time = self.first_packet_time
+                success = True
+                is_first_iteration = False
+            else:
+                packet = np.ndarray(shape=(0,), dtype=np.uint8)
+                if not self.nv_dmx.DemuxSinglePacket(packet):
+                    break
+                    
+                try:
+                    pkt_data = nvc.PacketData()
+                    self.nv_dmx.LastPacketData(pkt_data)
+                    packet_time = pkt_data.pts * timebase
+                except Exception:
+                    packet_time = frame_idx / self.fps
+                    
+                try:
+                    surf = self.nv_dec.DecodeSurfaceFromPacket(packet)
+                    if isinstance(surf, bool):
+                        success = surf  # pragma: no cover
+                    else:
+                        success = not surf.Empty()
+                        if success:
+                            self.dec_surface = surf
+                except TypeError:  # pragma: no cover
+                    success = self.nv_dec.DecodeSurfaceFromPacket(packet, self.dec_surface)  # pragma: no cover
+                if not success:
+                    continue  # pragma: no cover
+    
+            if next_target_time is None:
+                next_target_time = getattr(self, 'seek_time', packet_time)
+                if next_target_time == 0.0:
+                    next_target_time = packet_time
+    
+            current_time = packet_time
+    
+            should_yield = False
+            num_duplicates = 1
+            if target_fps is not None:
+                num_duplicates = 0
+                if current_time > next_target_time - (0.5 / target_fps):
+                    should_yield = True
+                    while next_target_time <= current_time + (0.5 / target_fps):
+                        num_duplicates += 1
+                        next_target_time += target_frame_interval
+            else:
+                if frame_idx % step == 0:
+                    should_yield = True
 
-            try:
-                surf = self.nv_dec.DecodeSurfaceFromPacket(packet)
-                if isinstance(surf, bool):
-                    success = surf  # pragma: no cover
-                else:
-                    success = not surf.Empty()
-                    if success:
-                        self.dec_surface = surf
-            except TypeError:  # pragma: no cover
-                success = self.nv_dec.DecodeSurfaceFromPacket(packet, self.dec_surface)  # pragma: no cover
-            if not success:
-                continue  # pragma: no cover
-
-            if frame_idx % step == 0:
+            if should_yield and num_duplicates > 0:
                 current_surface = self.dec_surface
 
                 if self.nv_res:
@@ -281,18 +331,24 @@ class GPUVideoStreamer:
                     # as_strided safely jumps over padding (Pitch) without distortions!
                     tensor = tensor_raw.as_strided((h, w, 3), (pitch, 3, 1)).contiguous().clone()
 
-                batch_frames.append(tensor)
-                batch_indices.append(frame_idx)
-
-                if len(batch_frames) == batch_size:
-                    yield torch.stack(batch_frames), list(batch_indices)
-                    batch_frames.clear()
-                    batch_indices.clear()
-                    frames_yielded += batch_size
-                    if max_frames is not None and frames_yielded >= max_frames:
+                for _ in range(num_duplicates):
+                    batch_frames.append(tensor)
+                    batch_indices.append(frame_idx)
+                    batch_timestamps.append(current_time)
+                    frames_yielded += 1
+        
+                    if len(batch_frames) == batch_size:
+                        yield torch.stack(batch_frames), batch_indices, batch_timestamps
+                        batch_frames = []
+                        batch_indices = []
+                        batch_timestamps = []
+                        
+                    if max_frames and frames_yielded >= max_frames:
                         break
-
+    
             frame_idx += 1
-
+            if max_frames and frames_yielded >= max_frames:
+                break
+    
         if batch_frames:
-            yield torch.stack(batch_frames), list(batch_indices)
+            yield torch.stack(batch_frames), batch_indices, batch_timestamps

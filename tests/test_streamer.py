@@ -95,8 +95,8 @@ def test_streamer_max_frames(tmp_path):
                 batches = list(streamer.stream_batches(batch_size=4, max_frames=5))
                 assert len(batches) == 2
                 assert len(batches[0][0]) == 4
-                # Next batch completes size 4 then breaks
-                assert len(batches[1][0]) == 4
+                # Next batch has 1 frame because max_frames=5
+                assert len(batches[1][0]) == 1
 
 def test_streamer_nv12_format(tmp_path):
     video_path = tmp_path / "test.mp4"
@@ -191,3 +191,33 @@ def test_streamer_close_cuda_cache(tmp_path):
     finally:
         torch.cuda.is_available = original_avail
 
+def test_streamer_target_fps(tmp_path):
+    video_path = tmp_path / "test.mp4"
+    video_path.touch()
+    
+    # 15 fps target from a 30 fps source -> every other frame.
+    side_effects = [True] * 10 + [False]
+    
+    mock_surf = MagicMock()
+    mock_surf.Empty.return_value = False
+    mock_surf.Height.return_value = 720
+    mock_surf.Width.return_value = 1280
+    
+    with patch.object(nvc.PyFFmpegDemuxer, 'DemuxSinglePacket', side_effect=side_effects):
+        with patch.object(nvc.PyFFmpegDemuxer, 'LastPacketData', side_effect=Exception("mock fail to fallback to fake time")):
+            mock_decoder = MagicMock()
+            mock_decoder.DecodeSurfaceFromPacket.return_value = mock_surf
+            with patch.object(nvc, 'PyNvDecoder', return_value=mock_decoder):
+                with patch("PytorchNvCodec.make_tensor", return_value=torch.zeros((720, 1280, 3))):
+                    with GPUVideoStreamer(video_path) as streamer:
+                        # Force streamer FPS
+                        streamer.fps = 30.0
+                        
+                        # Should yield 5 frames out of 10
+                        batches = list(streamer.stream_batches(batch_size=4, target_fps=15.0))
+                    
+                    assert len(batches) == 2
+                    assert len(batches[0][0]) == 4
+                    assert len(batches[1][0]) == 1
+                    assert batches[0][1] == [0, 2, 4, 6]
+                    assert batches[1][1] == [8]

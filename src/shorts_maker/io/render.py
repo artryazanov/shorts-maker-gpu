@@ -361,8 +361,8 @@ def render_video_gpu(
             ) as streamer:
 
                 batch_count = 0
-                for frames, _ in streamer.stream_batches(
-                    batch_size=BATCH_SIZE, max_frames=total_frames
+                for frames, _, _ in streamer.stream_batches(
+                    batch_size=BATCH_SIZE, max_frames=total_frames, target_fps=fps
                 ):
                     if batch_count % 50 == 0:
                         logger.info(f"Rendering batch {batch_count}/{total_batches}")

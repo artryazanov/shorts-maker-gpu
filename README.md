@@ -32,6 +32,7 @@ For the original CPU-only version, please visit [Shorts Maker](https://github.co
   - **Image Processing**: Native PyTorch operators used for heavy operations like blurring backgrounds (separable convolutions).
   - **Rendering**: Custom PyTorch+NVENC engine for high-performance rendering (MoviePy removed from render path).
   - **Robust Batch Processing**: Video processing runs in fully isolated subprocesses, completely clearing CUDA contexts between files to prevent VRAM fragmentation and OOM crashes (especially in Docker/WSL).
+  - **Accurate VFR Handling**: Extracts true Presentation Timestamps (PTS) directly from video packets to prevent audio/video desync, handling Variable Frame Rate (VFR) gameplay seamlessly.
 - Audio + video action scoring:
   - Combined ranking with tunable weights (defaults: audio 0.6, video 0.4).
 - Scenes ranked by combined action score rather than duration.

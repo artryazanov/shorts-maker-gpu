@@ -71,7 +71,7 @@ def compute_video_action_profile(
 
         # GPUVideoStreamer natively handles iterating to the end without hanging
         # and outputs only the batches representing the requested `step`
-        for frames_subset, global_indices in streamer.stream_batches(
+        for frames_subset, global_indices, batch_timestamps_list in streamer.stream_batches(
             batch_size=16, step=step
         ):
             frames_subset = frames_subset.float()
@@ -97,7 +97,7 @@ def compute_video_action_profile(
             motions.append(batch_motions)
 
             # Timestamps
-            batch_times = torch.tensor(global_indices, device=gray.device).float() / orig_fps
+            batch_times = torch.tensor(batch_timestamps_list, device=gray.device).float()
             times.append(batch_times)
 
             # Update last processed frame for next continuity
