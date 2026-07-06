@@ -195,11 +195,11 @@ def detect_video_scenes_gpu(
 
     actual_frame_count = max(frame_count, last_frame_processed + 1)
 
+    scenes: List[Tuple[_SecondsTime, _SecondsTime]] = []
     if not cut_indices:
-        scenes = [(_SecondsTime(0.0), _SecondsTime(actual_frame_count / fps))]
+        scenes.append((_SecondsTime(0.0), _SecondsTime(actual_frame_count / fps)))
     else:
         cut_indices = sorted(set(cut_indices))
-        scenes: List[Tuple[_SecondsTime, _SecondsTime]] = []
         last_cut = 0
         
         # We use index_to_time to get the EXACT real time of the cuts
