@@ -53,6 +53,7 @@ def detect_video_scenes_gpu(
         video_path: Path to the input video file.
         threshold: The threshold for the frame score to trigger a scene cut.
             Higher values require more visual change to trigger a cut.
+        skip_first_seconds: Time in seconds to skip at the beginning of the video.
 
     Returns:
         A list of tuples, where each tuple represents a scene containing 

@@ -164,7 +164,7 @@ def get_render_params(
     
     Args:
         video_path: Path to the source video file.
-        start_time: Start time of the clip in seconds.
+        start_point: Start time of the clip in seconds.
         final_clip_length: Desired duration of the clip in seconds.
         config: The processing configuration object.
         
