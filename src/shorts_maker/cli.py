@@ -16,6 +16,11 @@ def _process_video_worker(config: ProcessingConfig, video_file: Path, output_dir
     """Isolated worker for processing a single video.
 
     Ensures that PyTorch and VPF memory is entirely cleared upon exit.
+
+    Args:
+        config: A ProcessingConfig object containing pipeline settings.
+        video_file: Path to the source video file to process.
+        output_dir: Directory where the generated short clip will be saved.
     """
     logging.basicConfig(
         level=config.log_level,

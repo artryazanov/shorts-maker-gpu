@@ -62,7 +62,11 @@ class VideoProcessor:
         logger.info("\nProcess: %s", video_file.name)
 
         logger.info("Detecting scenes (GPU)...")
-        scene_list = detect_video_scenes_gpu(video_file, threshold=self.config.scene_threshold)
+        scene_list = detect_video_scenes_gpu(
+            video_file, 
+            threshold=self.config.scene_threshold,
+            skip_first_seconds=self.config.skip_first_seconds
+        )
 
         logger.info("Detected scenes:")
         for i, scene in enumerate(scene_list, start=1):
@@ -261,10 +265,11 @@ class VideoProcessor:
             if adapted_short_length <= 0:
                 adapted_short_length = short_length  # pragma: no cover
 
-            min_start_point = min(
-                10, math.floor(video_duration) - adapted_short_length
+            min_start_point = max(
+                self.config.skip_first_seconds,
+                min(10.0, math.floor(video_duration) - adapted_short_length)
             )
-            max_start_point = math.floor(video_duration - adapted_short_length)
+            max_start_point = max(min_start_point, math.floor(video_duration - adapted_short_length))
 
             start_point = float(
                 random.randint(int(min_start_point), int(max_start_point))

@@ -91,8 +91,10 @@ def test_render_video_gpu(mock_run, mock_popen, mock_dmx, mock_streamer, tmp_pat
     mock_dmx.return_value = mock_dmx_instance
     
     mock_streamer_instance = mock.MagicMock()
-    mock_streamer_instance.stream_batches.return_value = []
     mock_streamer_context = mock.MagicMock()
+    mock_streamer_context.first_packet_time = 0.0
+    mock_streamer_context.first_packet_valid = True
+    mock_streamer_context.stream_batches.return_value = []
     mock_streamer_context.__enter__.return_value = mock_streamer_instance
     mock_streamer.return_value = mock_streamer_context
 
@@ -154,10 +156,14 @@ def test_render_video_gpu_with_frames(mock_run, mock_popen, mock_dmx, mock_strea
     mock_dmx.return_value = mock_dmx_instance
     
     mock_streamer_instance = mock.MagicMock()
+    mock_streamer_instance.first_packet_time = 0.0
+    mock_streamer_instance.first_packet_valid = True
     # Mock stream_batches to yield ONE batch of frames
     fake_frames = tests.mock_gpu.FakeTensor(shape=(4, 1080, 1920, 3))
-    mock_streamer_instance.stream_batches.return_value = [(fake_frames, [0, 1, 2, 3], [0.0, 0.033, 0.066, 0.1])]
     mock_streamer_context = mock.MagicMock()
+    mock_streamer_context.first_packet_time = 0.0
+    mock_streamer_context.first_packet_valid = True
+    mock_streamer_context.stream_batches.return_value = [(fake_frames, [0, 1, 2, 3], [0.0, 0.033, 0.066, 0.1])]
     mock_streamer_context.__enter__.return_value = mock_streamer_instance
     mock_streamer.return_value = mock_streamer_context
 

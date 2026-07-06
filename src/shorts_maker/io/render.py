@@ -25,7 +25,11 @@ logger = logging.getLogger(__name__)
 
 
 def log_memory_usage(tag: str = "") -> None:
-    """Log current memory usage (RAM and VRAM)."""
+    """Log current memory usage (RAM and VRAM).
+    
+    Args:
+        tag: Optional string prefix to identify where the log was triggered.
+    """
     usage_stats = []
 
     # RAM
@@ -46,7 +50,22 @@ def log_memory_usage(tag: str = "") -> None:
 
 @dataclass
 class RenderParams:
-    """Parameters required to render the final clip."""
+    """Parameters required to render the final clip.
+    
+    Attributes:
+        source_path: Path to the source video file.
+        start_time: Start time of the clip in seconds.
+        duration: Duration of the clip in seconds.
+        output_width: Final output resolution width.
+        output_height: Final output resolution height.
+        crop_x: X coordinate for the cropped foreground.
+        crop_y: Y coordinate for the cropped foreground.
+        crop_w: Width of the cropped foreground.
+        crop_h: Height of the cropped foreground.
+        bg_width: Resolution width of the blurred background.
+        bg_height: Resolution height of the blurred background.
+        is_vertical_bg: True if background is 9:16 portrait, False if 1:1 square.
+    """
 
     source_path: Path
     start_time: float
@@ -66,6 +85,13 @@ def blur_gpu(image_tensor: torch.Tensor, sigma: float = 8.0) -> torch.Tensor:
     """Return a blurred version of an image using native PyTorch separable convolutions.
 
     Accepts both (H, W, C) and (N, C, H, W) formats.
+
+    Args:
+        image_tensor: The input image tensor.
+        sigma: Standard deviation for the Gaussian blur kernel.
+        
+    Returns:
+        The blurred image tensor in the same format and device as the input.
     """
     if sigma <= 0:
         return image_tensor
@@ -107,7 +133,14 @@ def blur_gpu(image_tensor: torch.Tensor, sigma: float = 8.0) -> torch.Tensor:
 
 
 def select_background_resolution(width: int) -> Tuple[int, int]:
-    """Choose an output resolution based on the clip width."""
+    """Choose an output resolution based on the clip width.
+    
+    Args:
+        width: The width of the cropped foreground video.
+        
+    Returns:
+        A tuple of (width, height) representing the target background resolution.
+    """
     if width < 840:
         return 720, 1280
     if width < 1020:
@@ -127,7 +160,17 @@ def get_render_params(
     final_clip_length: float,
     config: ProcessingConfig,
 ) -> RenderParams:
-    """Calculate all parameters needed for rendering the final clip."""
+    """Calculate all parameters needed for rendering the final clip.
+    
+    Args:
+        video_path: Path to the source video file.
+        start_time: Start time of the clip in seconds.
+        final_clip_length: Desired duration of the clip in seconds.
+        config: The processing configuration object.
+        
+    Returns:
+        A RenderParams object populated with calculated dimensions and timings.
+    """
     # Use PyFFmpegDemuxer to get dimensions quickly
     dmx = nvc.PyFFmpegDemuxer(str(video_path))
     w = dmx.Width()
@@ -215,18 +258,41 @@ def render_video_gpu(
     """
     logger.info(f"Rendering GPU: {output_path.name}")
 
-    # 1. Fast Extract Audio
-    temp_audio = output_path.with_suffix(".aac")
+    # 1. Determine FPS
+    fps = 30.0
+    try:
+        dmx = nvc.PyFFmpegDemuxer(str(params.source_path))
+        src_fps = float(dmx.Framerate())
+        fps = min(src_fps, 60.0)
+        del dmx
+    except Exception:  # pragma: no cover
+        fps = 30.0  # pragma: no cover
+        
+    # We open the streamer EARLY so we can extract the exact frame start time
+    streamer = GPUVideoStreamer(
+        str(params.source_path),
+        seek_time=params.start_time,
+    )
+    # Don't use a with block yet so we don't indent everything
+    
+    actual_start_time = getattr(streamer, 'first_packet_time', params.start_time)
+    if not getattr(streamer, 'first_packet_valid', False):
+        actual_start_time = params.start_time
+        
+    offset = max(0.0, actual_start_time - params.start_time)
+    actual_duration = max(0.1, params.duration - offset)
 
+    # 2. Fast Extract Audio
+    temp_audio = output_path.with_suffix(".aac")
     cmd_audio = [
         "/usr/bin/ffmpeg",
         "-y",
         "-ss",
-        f"{params.start_time:.3f}",
+        f"{actual_start_time:.3f}",
         "-i",
         str(params.source_path),
         "-t",
-        f"{params.duration:.3f}",
+        f"{actual_duration:.3f}",
         "-q:a",
         "0",
         "-map",
@@ -237,16 +303,7 @@ def render_video_gpu(
         cmd_audio, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False
     )
 
-    # 2. Setup FFMPEG process
-    fps = 30.0
-    try:
-        dmx = nvc.PyFFmpegDemuxer(str(params.source_path))
-        src_fps = float(dmx.Framerate())
-        fps = min(src_fps, 60.0)
-        del dmx
-    except Exception:  # pragma: no cover
-        fps = 30.0  # pragma: no cover
-
+    # 3. Setup FFMPEG process
     cmd_ffmpeg = [
         "/usr/bin/ffmpeg",
         "-y",
@@ -347,7 +404,7 @@ def render_video_gpu(
                     src_h * 0.5 - bg_crop_h / 2
                 )
 
-            total_frames = int(params.duration * fps)
+            total_frames = int(actual_duration * fps)
 
             BATCH_SIZE = 4
             total_batches = (total_frames + BATCH_SIZE - 1) // BATCH_SIZE
@@ -356,9 +413,7 @@ def render_video_gpu(
 
             with tqdm(
                 total=total_batches, desc="Video render", unit="batch"
-            ) as pbar_render, GPUVideoStreamer(
-                params.source_path, seek_time=params.start_time
-            ) as streamer:
+            ) as pbar_render, streamer:
 
                 batch_count = 0
                 for frames, _, _ in streamer.stream_batches(
@@ -489,7 +544,12 @@ def render_video_gpu(
 
 
 def render_video_gpu_isolated(*args: Any, **kwargs: Any) -> None:
-    """Runs render_video_gpu in a separate process to ensure memory cleanup."""
+    """Runs render_video_gpu in a separate process to ensure memory cleanup.
+    
+    Args:
+        *args: Positional arguments passed to render_video_gpu.
+        **kwargs: Keyword arguments passed to render_video_gpu.
+    """
     ctx = multiprocessing.get_context("spawn")
     p = ctx.Process(target=render_video_gpu, args=args, kwargs=kwargs)
     p.start()

@@ -20,7 +20,10 @@ class ProcessingConfig(BaseSettings):
         max_error_depth (int): Maximum number of retries if GPU rendering fails.
         min_short_length (int): Minimum permissible duration (in seconds) for a generated short.
         max_short_length (int): Maximum permissible duration (in seconds) for a generated short.
+        scene_threshold (float): Threshold for scene detection cuts.
         max_combined_scene_length (int): Maximum permitted length for a contiguous block of action.
+        save_ffmpeg_logs (bool): Whether to save FFmpeg logs during rendering.
+        log_level (str): Logging level (e.g., INFO, DEBUG, WARNING).
     """
 
     target_ratio_w: int = Field(default=9, description="Target aspect ratio width")
@@ -33,6 +36,7 @@ class ProcessingConfig(BaseSettings):
     max_short_length: int = Field(default=179, description="Maximum short length in seconds")
     scene_threshold: float = Field(default=45.0, description="Threshold for scene detection cuts")
     max_combined_scene_length: int = Field(default=300, description="Max allowed combined scene length")
+    skip_first_seconds: float = Field(default=0.0, description="Seconds to skip from the beginning of the video")
     save_ffmpeg_logs: bool = Field(default=False, description="Whether to save FFmpeg logs during rendering")
     log_level: str = Field(default="WARNING", description="Logging level (e.g., INFO, DEBUG, WARNING)")
 
@@ -40,5 +44,9 @@ class ProcessingConfig(BaseSettings):
 
     @property
     def middle_short_length(self) -> float:
-        """Return the mid point between min and max short lengths."""
+        """Return the mid point between min and max short lengths.
+        
+        Returns:
+            float: The mid point duration in seconds.
+        """
         return (self.min_short_length + self.max_short_length) / 2

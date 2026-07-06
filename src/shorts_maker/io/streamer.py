@@ -243,7 +243,7 @@ class GPUVideoStreamer:
                     continue  # pragma: no cover
     
             if next_target_time is None:
-                next_target_time = getattr(self, 'seek_time', packet_time)
+                next_target_time = getattr(self, 'first_packet_time', packet_time)
                 if next_target_time == 0.0:
                     next_target_time = packet_time
     

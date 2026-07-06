@@ -40,7 +40,7 @@ class _SecondsTime:
 
 
 def detect_video_scenes_gpu(
-    video_path: Path | str, threshold: float = 27.0
+    video_path: Path | str, threshold: float = 27.0, skip_first_seconds: float = 0.0
 ) -> List[Tuple[_SecondsTime, _SecondsTime]]:
     """Detects scene changes in a video using GPU-accelerated I/O.
 
@@ -195,25 +195,36 @@ def detect_video_scenes_gpu(
     actual_frame_count = max(frame_count, last_frame_processed + 1)
 
     if not cut_indices:
-        return [(_SecondsTime(0.0), _SecondsTime(actual_frame_count / fps))]
-
-    cut_indices = sorted(set(cut_indices))
-    scenes: List[Tuple[_SecondsTime, _SecondsTime]] = []
-    last_cut = 0
-    
-    # We use index_to_time to get the EXACT real time of the cuts
-    # If the exact index isn't in the dict (e.g. 0 before streaming started), fallback to frame/fps
-    def _get_time(idx: int) -> float:
-        return index_to_time.get(idx, idx / fps)
+        scenes = [(_SecondsTime(0.0), _SecondsTime(actual_frame_count / fps))]
+    else:
+        cut_indices = sorted(set(cut_indices))
+        scenes: List[Tuple[_SecondsTime, _SecondsTime]] = []
+        last_cut = 0
         
-    for cut in cut_indices:
-        start_time = _get_time(last_cut)
-        end_time = _get_time(cut)
-        scenes.append((_SecondsTime(start_time), _SecondsTime(end_time)))
-        last_cut = cut
-    # Last scene from last cut to end_pos
-    scenes.append((_SecondsTime(_get_time(last_cut)), _SecondsTime(_get_time(actual_frame_count))))
+        # We use index_to_time to get the EXACT real time of the cuts
+        # If the exact index isn't in the dict (e.g. 0 before streaming started), fallback to frame/fps
+        def _get_time(idx: int) -> float:
+            return index_to_time.get(idx, idx / fps)
+            
+        for cut in cut_indices:
+            start_time = _get_time(last_cut)
+            end_time = _get_time(cut)
+            scenes.append((_SecondsTime(start_time), _SecondsTime(end_time)))
+            last_cut = cut
+        # Last scene from last cut to end_pos
+        scenes.append((_SecondsTime(_get_time(last_cut)), _SecondsTime(_get_time(actual_frame_count))))
     
+    if skip_first_seconds > 0.0:
+        filtered_scenes: List[Tuple[_SecondsTime, _SecondsTime]] = []
+        for start, end in scenes:
+            if end.get_seconds() <= skip_first_seconds:
+                continue
+            if start.get_seconds() < skip_first_seconds:
+                filtered_scenes.append((_SecondsTime(skip_first_seconds), end))
+            else:
+                filtered_scenes.append((start, end))
+        return filtered_scenes
+
     return scenes
 
 
@@ -273,7 +284,17 @@ def _best_window_single(
     times: np.ndarray,
     score: np.ndarray,
 ) -> float:
-    """Internal helper to find the optimal start point using a single action profile."""
+    """Internal helper to find the optimal start point using a single action profile.
+    
+    Args:
+        scene: Tuple representing the full scene boundaries.
+        window_length: Desired duration of the final short clip (in seconds).
+        times: Array of timestamps corresponding to the score.
+        score: Array of action scores.
+        
+    Returns:
+        The optimal timestamp (in seconds) to start the clip.
+    """
     start_sec = float(scene[0].get_seconds())
     end_sec = float(scene[1].get_seconds())
 
