@@ -4,8 +4,9 @@ from unittest import mock
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
-import tests.mock_gpu  # noqa: F401, E402
-from shorts_maker.analysis.video import compute_video_action_profile  # noqa: E402
+import tests.mock_gpu  # noqa: F401
+from shorts_maker.analysis.video import compute_video_action_profile
+
 
 def test_compute_video_action_profile_dmx_error():
     with mock.patch("shorts_maker.analysis.video.nvc.PyFFmpegDemuxer", side_effect=Exception("Bad File")):
@@ -57,5 +58,5 @@ def test_compute_video_action_profile_zero_std(mock_streamer, mock_dmx):
     
     # Mock std to 0
     with mock.patch("tests.mock_gpu.FakeTensor.std", return_value=0.0):
-        t, s = compute_video_action_profile(Path("dummy.mp4"), fps=30)
+        t, _s = compute_video_action_profile(Path("dummy.mp4"), fps=30)
         assert len(t) == 1

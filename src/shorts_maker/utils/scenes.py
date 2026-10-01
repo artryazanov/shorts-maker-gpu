@@ -1,8 +1,8 @@
 """Module for detecting scenes, calculating smart boundaries, and evaluating action density."""
 
 import math
+from collections.abc import Sequence
 from pathlib import Path
-from typing import List, Optional, Sequence, Tuple
 
 import cv2
 import numpy as np
@@ -41,7 +41,7 @@ class _SecondsTime:
 
 def detect_video_scenes_gpu(
     video_path: Path | str, threshold: float = 27.0, skip_first_seconds: float = 0.0
-) -> List[Tuple[_SecondsTime, _SecondsTime]]:
+) -> list[tuple[_SecondsTime, _SecondsTime]]:
     """Detects scene changes in a video using GPU-accelerated I/O.
 
     This implementation replicates the exact semantics of PySceneDetect's 
@@ -90,16 +90,16 @@ def detect_video_scenes_gpu(
     class _FlashFilterMerge:
         def __init__(self, length: int):
             self._filter_length = int(length)
-            self._last_above: Optional[int] = None
+            self._last_above: int | None = None
             self._merge_enabled: bool = False
             self._merge_triggered: bool = False
-            self._merge_start: Optional[int] = None
+            self._merge_start: int | None = None
 
         @property
         def max_behind(self) -> int:
             return self._filter_length  # pragma: no cover
 
-        def filter(self, frame_num: int, above_threshold: bool) -> List[int]:
+        def filter(self, frame_num: int, above_threshold: bool) -> list[int]:
             if not (self._filter_length > 0):  # pragma: no cover
                 return [frame_num] if above_threshold else []  # pragma: no cover
             if self._last_above is None:
@@ -107,7 +107,7 @@ def detect_video_scenes_gpu(
             # MERGE path
             return self._filter_merge(frame_num, above_threshold)
 
-        def _filter_merge(self, frame_num: int, above_threshold: bool) -> List[int]:
+        def _filter_merge(self, frame_num: int, above_threshold: bool) -> list[int]:
             assert self._last_above is not None
             min_length_met = (frame_num - self._last_above) >= self._filter_length
             if above_threshold:
@@ -130,8 +130,7 @@ def detect_video_scenes_gpu(
             return []  # pragma: no cover
 
     min_scene_len = int(fps * 1.5)
-    if min_scene_len < 15:
-        min_scene_len = 15  # pragma: no cover
+    min_scene_len = max(min_scene_len, 15)  # pragma: no cover
     flash_filter = _FlashFilterMerge(length=min_scene_len)
 
     # 4) Iterate frames, compute HSV components & frame score like ContentDetector
@@ -139,8 +138,8 @@ def detect_video_scenes_gpu(
     total_batches = (frame_count + batch_size - 1) // batch_size
     pbar = tqdm(total=total_batches, desc="Detect scenes", unit="batch")
 
-    last_hsv: Optional[Tuple[np.ndarray, np.ndarray, np.ndarray]] = None
-    cut_indices: List[int] = []
+    last_hsv: tuple[np.ndarray, np.ndarray, np.ndarray] | None = None
+    cut_indices: list[int] = []
     last_frame_processed = 0
     index_to_time = {}
 
@@ -195,7 +194,7 @@ def detect_video_scenes_gpu(
 
     actual_frame_count = max(frame_count, last_frame_processed + 1)
 
-    scenes: List[Tuple[_SecondsTime, _SecondsTime]] = []
+    scenes: list[tuple[_SecondsTime, _SecondsTime]] = []
     if not cut_indices:
         scenes.append((_SecondsTime(0.0), _SecondsTime(actual_frame_count / fps)))
     else:
@@ -216,7 +215,7 @@ def detect_video_scenes_gpu(
         scenes.append((_SecondsTime(_get_time(last_cut)), _SecondsTime(_get_time(actual_frame_count))))
     
     if skip_first_seconds > 0.0:
-        filtered_scenes: List[Tuple[_SecondsTime, _SecondsTime]] = []
+        filtered_scenes: list[tuple[_SecondsTime, _SecondsTime]] = []
         for start, end in scenes:
             if end.get_seconds() <= skip_first_seconds:
                 continue
@@ -230,7 +229,7 @@ def detect_video_scenes_gpu(
 
 
 def scene_action_score(
-    scene: Tuple[_SecondsTime, _SecondsTime],
+    scene: tuple[_SecondsTime, _SecondsTime],
     audio_times: np.ndarray,
     audio_score: np.ndarray,
     video_times: np.ndarray | None = None,
@@ -280,7 +279,7 @@ def scene_action_score(
 
 
 def _best_window_single(
-    scene: Tuple[_SecondsTime, _SecondsTime],
+    scene: tuple[_SecondsTime, _SecondsTime],
     window_length: float,
     times: np.ndarray,
     score: np.ndarray,
@@ -335,7 +334,7 @@ def _best_window_single(
 
 
 def best_action_window_start(
-    scene: Tuple[_SecondsTime, _SecondsTime],
+    scene: tuple[_SecondsTime, _SecondsTime],
     window_length: float,
     audio_times: np.ndarray,
     audio_score: np.ndarray,
@@ -418,8 +417,8 @@ def best_action_window_start(
 
 
 def combine_scenes(
-    scene_list: Sequence[Tuple[_SecondsTime, _SecondsTime]], config: ProcessingConfig
-) -> List[Tuple[_SecondsTime, _SecondsTime]]:
+    scene_list: Sequence[tuple[_SecondsTime, _SecondsTime]], config: ProcessingConfig
+) -> list[tuple[_SecondsTime, _SecondsTime]]:
     """Merges fragmented, adjacent micro-scenes into cohesive segments.
 
     Prevents the generation of overly fragmented clips by combining consecutive 
@@ -435,7 +434,7 @@ def combine_scenes(
     if not scene_list:
         return []
 
-    out: List[Tuple[_SecondsTime, _SecondsTime]] = []
+    out: list[tuple[_SecondsTime, _SecondsTime]] = []
     current_start = scene_list[0][0]
     current_end = scene_list[0][1]
 
@@ -468,8 +467,8 @@ def combine_scenes(
 
 
 def split_overlong_scenes(
-    combined_scene_list: List[Tuple[_SecondsTime, _SecondsTime]], config: ProcessingConfig
-) -> List[Tuple[_SecondsTime, _SecondsTime]]:
+    combined_scene_list: list[tuple[_SecondsTime, _SecondsTime]], config: ProcessingConfig
+) -> list[tuple[_SecondsTime, _SecondsTime]]:
     """Splits extremely long scenes into manageable, equally-sized chunks.
 
     Prevents the rendering pipeline from becoming overwhelmed by scenes that 
@@ -482,7 +481,7 @@ def split_overlong_scenes(
     Returns:
         A flattened list where overlong scenes have been subdivided.
     """
-    result: List[Tuple[_SecondsTime, _SecondsTime]] = []
+    result: list[tuple[_SecondsTime, _SecondsTime]] = []
     threshold = 2.0 * config.max_short_length
     for scene in combined_scene_list:
         start_s = scene[0].get_seconds()

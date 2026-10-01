@@ -1,8 +1,8 @@
-from unittest.mock import MagicMock, patch
 from unittest import mock
+from unittest.mock import MagicMock, patch
 
-import pytest
 import PyNvCodec as nvc
+import pytest
 import torch
 
 from shorts_maker.io.streamer import GPUVideoStreamer

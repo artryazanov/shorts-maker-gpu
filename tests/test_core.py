@@ -1,15 +1,20 @@
 import sys
 from pathlib import Path
 from unittest import mock
+
 import numpy as np
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 import tests.mock_gpu  # noqa: F401
+from shorts_maker.config import ProcessingConfig
 from shorts_maker.core.processor import VideoProcessor
-from shorts_maker.utils.scenes import combine_scenes, split_overlong_scenes
-from shorts_maker.config import ProcessingConfig  # noqa: E402
-from shorts_maker.utils.scenes import _SecondsTime  # noqa: E402
+from shorts_maker.utils.scenes import (
+    _SecondsTime,
+    combine_scenes,
+    split_overlong_scenes,
+)
+
 
 def test_combine_scenes_empty():
     config = ProcessingConfig()

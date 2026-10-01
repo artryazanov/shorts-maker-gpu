@@ -1,7 +1,8 @@
-import tests.mock_gpu  # noqa: F401, E402
-from typer.testing import CliRunner
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
+from typer.testing import CliRunner
+
+import tests.mock_gpu  # noqa: F401
 from shorts_maker.cli import app
 
 runner = CliRunner()

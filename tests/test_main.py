@@ -4,8 +4,9 @@ from pathlib import Path
 # Ensure the project root is on the import path.
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
-from shorts_maker.cli import app
 from typer.testing import CliRunner
+
+from shorts_maker.cli import app
 
 runner = CliRunner()
 

@@ -1,7 +1,8 @@
 import sys
-from unittest.mock import MagicMock
-import numpy as np
 from pathlib import Path
+from unittest.mock import MagicMock
+
+import numpy as np
 
 # --- Mock GPU libraries BEFORE importing shorts ---
 # We must mock decord, torchaudio, torch so that shorts.py can be imported
@@ -12,11 +13,11 @@ from pathlib import Path
 # Ensure the project root is on the import path.
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
-import tests.mock_gpu  # noqa: F401, E402
-from shorts_maker.utils.scenes import combine_scenes, _SecondsTime
-from shorts_maker.io.render import select_background_resolution
-from shorts_maker.config import ProcessingConfig
+import tests.mock_gpu
 from shorts_maker.analysis.video import compute_video_action_profile
+from shorts_maker.config import ProcessingConfig
+from shorts_maker.io.render import select_background_resolution
+from shorts_maker.utils.scenes import _SecondsTime, combine_scenes
 
 
 # Helper to create scene tuples

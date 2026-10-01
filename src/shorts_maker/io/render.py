@@ -7,7 +7,7 @@ import multiprocessing
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Tuple
+from typing import Any
 
 import PyNvCodec as nvc
 import torch
@@ -132,7 +132,7 @@ def blur_gpu(image_tensor: torch.Tensor, sigma: float = 8.0) -> torch.Tensor:
     return x.to(image_tensor.dtype)
 
 
-def select_background_resolution(width: int) -> Tuple[int, int]:
+def select_background_resolution(width: int) -> tuple[int, int]:
     """Choose an output resolution based on the clip width.
     
     Args:

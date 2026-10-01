@@ -5,7 +5,8 @@ from unittest import mock
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 import tests.mock_gpu  # noqa: F401
-from shorts_maker.utils.scenes import detect_video_scenes_gpu  # noqa: E402
+from shorts_maker.utils.scenes import detect_video_scenes_gpu
+
 
 @mock.patch("shorts_maker.utils.scenes.GPUVideoStreamer")
 @mock.patch("shorts_maker.utils.scenes.nvc.PyFFmpegDemuxer")

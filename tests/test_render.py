@@ -2,15 +2,17 @@ import sys
 from pathlib import Path
 from unittest import mock
 
-import tests.mock_gpu  # noqa: F401
+import tests.mock_gpu
+
 sys.path.append(str(Path(__file__).resolve().parent.parent))
+from shorts_maker.config import ProcessingConfig
 from shorts_maker.io.render import (
-    select_background_resolution,
     get_render_params,
-    render_video_gpu_isolated,
     render_video_gpu,
+    render_video_gpu_isolated,
+    select_background_resolution,
 )
-from shorts_maker.config import ProcessingConfig  # noqa: E402
+
 
 def test_select_background_resolution():
     assert select_background_resolution(800) == (720, 1280)
@@ -145,8 +147,9 @@ def test_render_video_gpu_invalid_first_packet(mock_run, mock_popen, mock_dmx, m
     mock_process.wait.assert_called_once()
 
 def test_blur_gpu():
-    from shorts_maker.io.render import blur_gpu
     import torch
+
+    from shorts_maker.io.render import blur_gpu
     
     # Create dummy tensor (H, W, C)
     dummy = torch.ones((10, 10, 3))

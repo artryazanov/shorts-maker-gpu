@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Any, Iterator, Optional, Tuple
+from typing import Any
 
 import cv2
 import numpy as np
@@ -33,8 +34,8 @@ class GPUVideoStreamer:
         self, 
         video_path: Path | str, 
         gpu_id: int = 0,
-        target_width: Optional[int] = None,
-        target_height: Optional[int] = None,
+        target_width: int | None = None,
+        target_height: int | None = None,
         pix_fmt: nvc.PixelFormat = nvc.PixelFormat.RGB,
         seek_time: float = 0.0,
     ):
@@ -153,7 +154,7 @@ class GPUVideoStreamer:
             del self.nv_dmx
             raise
 
-    def __enter__(self) -> "GPUVideoStreamer":
+    def __enter__(self) -> GPUVideoStreamer:
         """Enters the context manager for GPUVideoStreamer."""
         return self
 
@@ -174,9 +175,9 @@ class GPUVideoStreamer:
         self,
         batch_size: int = 16,
         step: int = 1,
-        max_frames: Optional[int] = None,
-        target_fps: Optional[float] = None
-    ) -> Iterator[Tuple[torch.Tensor, list[int], list[float]]]:
+        max_frames: int | None = None,
+        target_fps: float | None = None
+    ) -> Iterator[tuple[torch.Tensor, list[int], list[float]]]:
         """Yields batches of decoded frames as PyTorch tensors directly in VRAM.
     
         Reads packets from the demuxer, decodes them to GPU surfaces, applies optional
@@ -249,9 +250,8 @@ class GPUVideoStreamer:
                     while next_target_time <= current_time + (0.5 / target_fps):
                         num_duplicates += 1
                         next_target_time += target_frame_interval
-            else:
-                if frame_idx % step == 0:
-                    should_yield = True
+            elif frame_idx % step == 0:
+                should_yield = True
 
             if should_yield and num_duplicates > 0:
                 current_surface = self.dec_surface

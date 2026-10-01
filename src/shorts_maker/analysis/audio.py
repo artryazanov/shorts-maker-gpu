@@ -2,7 +2,6 @@
 
 import logging
 from pathlib import Path
-from typing import Tuple
 
 import numpy as np
 import torch
@@ -17,7 +16,7 @@ def compute_audio_action_profile(
     video_path: Path,
     frame_length: int = 2048,
     hop_length: int = 512,
-) -> Tuple[np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray]:
     """Computes an audio-based "action score" on the GPU using memory-efficient batching.
 
     This function analyzes the audio track to identify high-energy moments (action). 
@@ -45,9 +44,9 @@ def compute_audio_action_profile(
     """
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    import tempfile
-    import subprocess
     import os
+    import subprocess
+    import tempfile
     import wave
 
     use_wave_fallback = False
@@ -224,8 +223,7 @@ def compute_audio_action_profile(
     def smooth_gpu(x: torch.Tensor, win: int = 21) -> torch.Tensor:
         if x.numel() == 0:
             return x
-        if win > x.shape[0]:
-            win = x.shape[0]  # pragma: no cover
+        win = min(win, x.shape[0])  # pragma: no cover
         if win % 2 == 0:
             win += 1  # pragma: no cover
         padding = win // 2

@@ -1,11 +1,17 @@
 import sys
 from pathlib import Path
+
 import numpy as np
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 import tests.mock_gpu  # noqa: F401
-from shorts_maker.utils.scenes import _SecondsTime, _best_window_single, best_action_window_start  # noqa: E402
+from shorts_maker.utils.scenes import (
+    _best_window_single,
+    _SecondsTime,
+    best_action_window_start,
+)
+
 
 def test_best_window_single():
     scene = (_SecondsTime(0.0), _SecondsTime(10.0))

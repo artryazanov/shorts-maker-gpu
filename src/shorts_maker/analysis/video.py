@@ -2,7 +2,6 @@
 
 import logging
 from pathlib import Path
-from typing import Tuple
 
 import cv2
 import numpy as np
@@ -20,7 +19,7 @@ def compute_video_action_profile(
     video_path: Path,
     fps: int = 6,
     downscale_factor: int = 4,
-) -> Tuple[np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray]:
     """Computes a frame-by-frame video "action score" entirely on the GPU.
 
     Uses the GPUVideoStreamer to read frames directly into VRAM, converts them to 
@@ -125,8 +124,7 @@ def compute_video_action_profile(
 
     # Smooth
     def smooth_gpu(x: torch.Tensor, win: int) -> torch.Tensor:
-        if win > x.shape[0]:
-            win = x.shape[0]
+        win = min(win, x.shape[0])
         if win < 2:
             return x
         kernel = torch.ones(win, device=x.device) / win

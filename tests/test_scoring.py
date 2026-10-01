@@ -1,10 +1,12 @@
 import sys
 from pathlib import Path
+
 import numpy as np
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 import tests.mock_gpu  # noqa: F401
-from shorts_maker.utils.scenes import scene_action_score, _SecondsTime  # noqa: E402
+from shorts_maker.utils.scenes import _SecondsTime, scene_action_score
+
 
 def test_scene_action_score_audio_only():
     scene = (_SecondsTime(1.0), _SecondsTime(3.0))

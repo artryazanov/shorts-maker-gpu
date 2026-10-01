@@ -9,6 +9,6 @@ logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 __all__ = [
     "GPUVideoStreamer",
-    "VideoProcessor",
     "ProcessingConfig",
+    "VideoProcessor",
 ]

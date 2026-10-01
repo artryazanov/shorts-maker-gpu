@@ -1,7 +1,9 @@
 import sys
 from pathlib import Path
 from unittest import mock
+
 import numpy as np
+
 
 class FakeTensor:
     def __init__(self, shape=(100,), numel=100):
@@ -74,9 +76,10 @@ class FakeTensor:
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
-import tests.mock_gpu  # noqa: F401, E402
 import shorts_maker as shorts  # noqa: E402
+import tests.mock_gpu  # noqa: F401, E402
 from shorts_maker.analysis.audio import compute_audio_action_profile  # noqa: E402
+
 
 def test_compute_audio_action_profile_load_failure():
     shorts.analysis.audio.torchaudio.load.side_effect = Exception("Failed")

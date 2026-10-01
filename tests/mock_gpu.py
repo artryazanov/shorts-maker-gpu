@@ -2,6 +2,7 @@ import sys
 import types
 from unittest import mock
 
+
 def create_mock_module(name):
     m = types.ModuleType(name)
     m.__path__ = []
