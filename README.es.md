@@ -2,11 +2,11 @@
 
 # 🎬 Shorts Maker (Optimizado para GPU)
 
-Shorts Maker genera clips de video verticales a partir de grabaciones de juego más largas. Esta biblioteca de Python y herramienta CLI detecta escenas, calcula los perfiles de acción de audio y video (intensidad del sonido + movimiento visual) y los combina para clasificar las escenas según su intensidad general. Luego, recorta a la relación de aspecto deseada y renderiza "shorts" listos para subir.
+Shorts Maker genera clips de video verticales a partir de videos de partidas (gameplays) más largos. Esta biblioteca de Python y herramienta CLI detecta escenas, calcula perfiles de acción de audio y video (intensidad del sonido + movimiento visual) y los combina para clasificar las escenas por su intensidad general. Luego, recorta al formato deseado y renderiza los "shorts" listos para ser subidos.
 
 **Esta versión ha sido fuertemente optimizada para GPUs NVIDIA utilizando CUDA.**
 
-Para la versión original exclusiva para CPU, por favor visita [Shorts Maker](https://github.com/artryazanov/shorts-maker).
+Para la versión original solo para CPU, por favor visite [Shorts Maker](https://github.com/artryazanov/shorts-maker).
 
 [![PyPI](https://img.shields.io/pypi/v/shorts-maker-gpu.svg)](https://pypi.org/project/shorts-maker-gpu/)
 [![Downloads](https://static.pepy.tech/badge/shorts-maker-gpu)](https://pepy.tech/project/shorts-maker-gpu)
@@ -20,36 +20,37 @@ Para la versión original exclusiva para CPU, por favor visita [Shorts Maker](ht
 ![CUDA](https://img.shields.io/badge/CUDA-13.0-green)
 ![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=flat&logo=docker&logoColor=white)
 
-### [Lee la Documentación Completa 📚](https://artryazanov.github.io/shorts-maker-gpu/)
+### [Lee la documentación completa 📚](https://artryazanov.github.io/shorts-maker-gpu/)
 
 ## ✨ Características
 
 - **Procesamiento acelerado por GPU**:
-  - **Decodificación y redimensionamiento por hardware**: Integración nativa del Video Processing Framework (VPF) de NVIDIA a través de `PyNvCodec`. Decodifica, redimensiona y convierte espacios de color directamente en NVDEC.
+  - **Decodificación y redimensionamiento por hardware**: Integración nativa del NVIDIA Video Processing Framework (VPF) a través de `PyNvCodec`. Decodifica, redimensiona y convierte espacios de color directamente en NVDEC.
   - **Detección de escenas**: Implementación personalizada utilizando VPF y OpenCV.
-  - **Análisis de audio**: Utiliza `torchaudio` en la GPU para el cálculo rápido del valor RMS y el flujo espectral.
-  - **Análisis de video**: Transmisión de memoria GPU sin copias (zero-copy) para una estimación de movimiento estable (reemplaza los pesados índices de fotogramas).
-  - **Procesamiento de imágenes**: Operadores nativos de PyTorch utilizados para operaciones pesadas como desenfoque de fondos (convoluciones separables).
-  - **Renderizado**: Motor personalizado de PyTorch+NVENC para un renderizado de alto rendimiento (MoviePy eliminado de la ruta de renderizado).
-  - **Procesamiento por lotes robusto**: El procesamiento de video se ejecuta en subprocesos totalmente aislados, limpiando completamente los contextos CUDA entre archivos para evitar la fragmentación de la VRAM y bloqueos por falta de memoria (OOM), especialmente en Docker/WSL.
+  - **Análisis de audio**: Utiliza `torchaudio` en la GPU para un cálculo rápido del RMS y el flujo espectral.
+  - **Análisis de video**: Transmisión de memoria de GPU sin copias (zero-copy) para una estimación de movimiento estable (reemplaza los pesados índices de fotogramas).
+  - **Procesamiento de imágenes**: Operadores nativos de PyTorch utilizados para operaciones pesadas como desenfocar fondos (convoluciones separables).
+  - **Renderizado**: Motor personalizado de PyTorch+NVENC para un renderizado de alto rendimiento (se ha eliminado MoviePy de la ruta de renderizado).
+  - **Procesamiento por lotes robusto**: El procesamiento de video se ejecuta en subprocesos totalmente aislados, limpiando por completo los contextos CUDA entre archivos para evitar la fragmentación de la VRAM y fallos por falta de memoria (OOM), especialmente en Docker/WSL.
+  - **Manejo preciso de VFR**: Extrae las Marcas de Tiempo de Presentación (PTS) reales directamente de los paquetes de video para evitar la desincronización de audio/video, manejando el metraje con Tasa de Fotogramas Variable (VFR) sin problemas.
 - Puntuación de acción de audio + video:
-  - Clasificación combinada con pesos ajustables (predeterminados: audio 0.6, video 0.4).
+  - Clasificación combinada con pesos ajustables (valores predeterminados: audio 0.6, video 0.4).
 - Escenas clasificadas por puntuación de acción combinada en lugar de por duración.
 - **Corte inteligente de escenas**:
-  - Selecciona preferentemente escenas completas si se ajustan al límite de tiempo.
-  - **Relleno de escenas (Padding)**: Añade un margen (búfer) de 1.5 segundos al final de las escenas para capturar animaciones de salida y desvanecimientos.
-  - **Recorte inteligente (Trimming)**: En escenas largas, busca momentos "tranquilos" (bajo nivel de audio/movimiento) para realizar el corte, evitando finales abruptos.
-- Recorte inteligente con fondo desenfocado opcional para grabaciones no verticales.
-- Lógica de reintento durante el renderizado para evitar fallos espurios.
-- Configuración mediante variables de entorno `.env`.
+  - Selecciona preferentemente escenas completas si encajan dentro del límite de tiempo.
+  - **Relleno de escenas (Padding)**: Añade un margen de 1,5 segundos al final de las escenas para capturar animaciones de salida y transiciones.
+  - **Recorte inteligente**: Para escenas largas, busca momentos "tranquilos" (bajo audio/movimiento) para cortar, evitando finales abruptos.
+- Recorte inteligente con fondo desenfocado opcional para metraje no vertical.
+- Lógica de reintentos durante el renderizado para evitar fallos espurios.
+- Configuración mediante variables de entorno en un archivo `.env`.
 
 ## 📋 Requisitos
 
 - **GPU NVIDIA** con soporte para CUDA.
-- **Controladores de NVIDIA** (se recomienda compatibilidad con CUDA 13.0+).
+- **Controladores NVIDIA** (se recomiendan compatibles con CUDA 13.0+).
 - Python 3.12+
-- FFmpeg (utilizado para la extracción de audio y codificación NVENC).
-- Bibliotecas del sistema: `libgl1`, `libglib2.0-0` (a menudo necesarias para bibliotecas de visión).
+- FFmpeg (usado para la extracción de audio y codificación NVENC).
+- Bibliotecas del sistema: `libgl1`, `libglib2.0-0` (a menudo necesarias para las bibliotecas de visión).
 
 Dependencias de Python (ver `pyproject.toml`):
 - `torch`, `torchaudio` (con soporte para CUDA)
@@ -59,7 +60,7 @@ Dependencias de Python (ver `pyproject.toml`):
 
 ### A través de PyPI (Recomendado)
 
-Asegúrate de tener instalados los controladores de NVIDIA y el kit de herramientas CUDA. Luego instala el paquete directamente:
+Asegúrese de tener instalados los controladores NVIDIA y el toolkit de CUDA. Luego instale el paquete directamente:
 
 ```bash
 pip install shorts-maker-gpu
@@ -67,7 +68,7 @@ pip install shorts-maker-gpu
 
 ### Configuración manual desde el código fuente (Linux con CUDA)
 
-Asegúrate de tener instalados los controladores de NVIDIA y el kit de herramientas CUDA.
+Asegúrese de tener instalados los controladores NVIDIA y el toolkit de CUDA.
 
 ```bash
 git clone https://github.com/artryazanov/shorts-maker-gpu.git
@@ -79,35 +80,35 @@ source venv/bin/activate
 pip install -e .
 ```
 
-Si tienes problemas y PyTorch no detecta la GPU, consulta su guía de instalación para tu versión específica de CUDA.
+Si tiene problemas porque PyTorch no detecta la GPU, consulte su guía de instalación para su versión específica de CUDA.
 
 ## 💡 Uso
 
-1. Coloca los videos de origen dentro del directorio `gameplay/`.
-2. Ejecuta la herramienta CLI:
+1. Coloque los videos de origen dentro del directorio `gameplay/`.
+2. Ejecute la herramienta CLI:
 
 ```bash
 shorts-maker process
 ```
 
-Opcionalmente, puedes personalizar los directorios de entrada y salida, así como los límites de las escenas:
+Opcionalmente, puede personalizar los directorios de entrada y salida, así como los límites de las escenas:
 ```bash
 shorts-maker process --input-dir my_videos/ --output-dir my_shorts/ --scene-limit 3
 ```
 
 3. Los clips generados se guardan en el directorio `generated/`.
 
-Durante el procesamiento, el registro de eventos (log) muestra una puntuación de acción para cada escena combinada y la lista final ordenada por dicha puntuación. Las mejores escenas (según la intensidad de acción) se renderizan primero utilizando NVENC.
+Durante el procesamiento, el registro de eventos (log) muestra una puntuación de acción para cada escena combinada y la lista final ordenada por dicha puntuación. Las mejores escenas (por intensidad de acción) se renderizan primero utilizando NVENC.
 
 ## 🐳 Docker (Recomendado)
 
-La forma más sencilla de ejecutar esta aplicación es mediante Docker con el NVIDIA Container Toolkit.
+La forma más sencilla de ejecutar esta aplicación es utilizando Docker con el NVIDIA Container Toolkit.
 
-**Requisito previo**: [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html) debe estar instalado en el sistema anfitrión.
+**Requisito previo**: [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html) debe estar instalado en el sistema anfitrión (host).
 
-Compilar y ejecutar:
+Construir y ejecutar:
 
-*(Nota: Si la compilación falla con un "Segmentation fault" o error de memoria, limita los núcleos de CPU utilizando `docker build --cpuset-cpus="0,1" -t shorts-maker .` en su lugar).*
+*(Nota: Si la construcción (build) falla con un error de "Segmentation fault" o falta de memoria, limite los núcleos de la CPU usando `docker build --cpuset-cpus="0,1" -t shorts-maker .` en su lugar).*
 
 ```bash
 docker build -t shorts-maker .
@@ -121,60 +122,61 @@ docker run --rm \
     shorts-maker
 ```
 
-Ten en cuenta la bandera `--gpus all`, que es fundamental para que la aplicación pueda acceder a la aceleración por hardware.
+Observe el flag `--gpus all`, el cual es esencial para que la aplicación acceda a la aceleración por hardware.
 
 ## ⚙️ Configuración
 
-Copia `.env.example` a `.env` y ajusta los valores según sea necesario.
+Copie `.env.example` a `.env` y ajuste los valores según sea necesario.
 
 Variables compatibles (se muestran los valores predeterminados):
-- `TARGET_RATIO_W=9` — Parte correspondiente a la anchura de la relación de aspecto objetivo (p. ej., 9 para 9:16).
-- `TARGET_RATIO_H=16` — Parte correspondiente a la altura de la relación de aspecto objetivo (p. ej., 16 para 9:16).
-- `SCENE_LIMIT=4` — Número máximo de escenas principales a renderizar por video fuente.
-- `SCENE_THRESHOLD=45.0` — Umbral para cortes de detección de escenas.
-- `X_CENTER=0.5` — Centro de recorte horizontal en el rango [0.0, 1.0].
-- `Y_CENTER=0.5` — Centro de recorte vertical en el rango [0.0, 1.0].
-- `MAX_ERROR_DEPTH=3` — Profundidad máxima de reintentos si falla el renderizado.
-- `MIN_SHORT_LENGTH=15` — Duración mínima del corto en segundos.
-- `MAX_SHORT_LENGTH=179` — Duración máxima del corto en segundos.
-- `MAX_COMBINED_SCENE_LENGTH=300` — Duración máxima combinada (en segundos).
-- `SAVE_FFMPEG_LOGS=False` — Define si se guardan los registros (logs) de FFmpeg durante el renderizado.
-- `LOG_LEVEL=WARNING` — Nivel de registro (p. ej., INFO, DEBUG, WARNING).
+- `TARGET_RATIO_W=9` — Parte del ancho de la relación de aspecto objetivo (ej. 9 para 9:16).
+- `TARGET_RATIO_H=16` — Parte del alto de la relación de aspecto objetivo (ej. 16 para 9:16).
+- `SCENE_LIMIT=4` — Número máximo de las mejores escenas a renderizar por video de origen.
+- `SCENE_THRESHOLD=45.0` — Umbral para los cortes de detección de escenas.
+- `X_CENTER=0.5` — Centro del recorte horizontal en el rango [0.0, 1.0].
+- `Y_CENTER=0.5` — Centro del recorte vertical en el rango [0.0, 1.0].
+- `MAX_ERROR_DEPTH=3` — Profundidad máxima de reintentos si el renderizado falla.
+- `MIN_SHORT_LENGTH=15` — Longitud mínima del short en segundos.
+- `MAX_SHORT_LENGTH=179` — Longitud máxima del short en segundos.
+- `MAX_COMBINED_SCENE_LENGTH=300` — Longitud combinada máxima (en segundos).
+- `SKIP_FIRST_SECONDS=0.0` — Segundos a omitir desde el inicio del video (útil para saltar las pantallas de introducción).
+- `SAVE_FFMPEG_LOGS=False` — Determina si se deben guardar los registros de FFmpeg durante el renderizado.
+- `LOG_LEVEL=WARNING` — Nivel de registro de eventos (ej. INFO, DEBUG, WARNING).
 
 ## 🛠️ Desarrollo
 
-### Análisis de código (Linting)
+### Linting
 
-Este proyecto utiliza `ruff` para un análisis rápido de código.
+Este proyecto usa `ruff` para un linting rápido.
 
 ```bash
 pip install ruff
 ruff check .
 ```
 
-## 🧪 Ejecución de Pruebas
+## 🧪 Ejecución de pruebas
 
-Las pruebas unitarias se encuentran en la carpeta `tests/`. Ejecútalas con:
+Las pruebas unitarias se encuentran en la carpeta `tests/`. Ejecútelas con:
 
 ```bash
 pytest -q
 ```
 
-Nota: Las pruebas están diseñadas para simular la disponibilidad de la GPU si no está presente, de modo que puedan ejecutarse en entornos CI estándar.
+Nota: Las pruebas están diseñadas para simular (mock) la disponibilidad de la GPU en caso de que falte, de modo que puedan ejecutarse en entornos de integración continua (CI) estándar.
 
-## 🚑 Solución de Problemas
+## 🚑 Solución de problemas
 
-- **"internal compiler error: Segmentation fault" durante `docker build`**: Generalmente ocurre debido a un error por falta de memoria (OOM) cuando Docker intenta compilar bibliotecas pesadas de C++/CUDA (como VPF) usando todos los núcleos de CPU disponibles. Para solucionarlo, limita el número de núcleos de CPU utilizados durante el proceso de compilación:
+- **"internal compiler error: Segmentation fault" durante `docker build`**: Esto ocurre típicamente debido a un error de falta de memoria (OOM) cuando Docker intenta compilar bibliotecas C++/CUDA pesadas (como VPF) usando todos los núcleos de CPU disponibles. Para solucionarlo, limite el número de núcleos de CPU utilizados durante el proceso de construcción:
   ```bash
   docker build --cpuset-cpus="0,1" -t shorts-maker .
   ```
-  *(Alternativamente, puedes aumentar el límite de memoria RAM para Docker/WSL2 en la configuración de tu sistema).*
-- **"WSL integration with distro unexpectedly stopped" / OOM durante `docker run`**: Procesar video en alta resolución puede consumir una cantidad significativa de RAM/VRAM, provocando el bloqueo de la máquina virtual WSL2 debido a un error de falta de memoria (OOM). Para solucionarlo, limita el número de núcleos de CPU que el contenedor puede utilizar durante su ejecución agregando la bandera `--cpus`:
+  *(Alternativamente, puede aumentar el límite de RAM para Docker/WSL2 en la configuración de su sistema).*
+- **"WSL integration with distro unexpectedly stopped" / OOM durante `docker run`**: Procesar video en alta resolución puede consumir una cantidad significativa de RAM/VRAM, lo que provoca que la máquina virtual de WSL2 se bloquee por un error de falta de memoria (OOM). Para solucionar esto, limite la cantidad de núcleos de CPU que el contenedor puede usar durante la ejecución añadiendo el flag `--cpus`:
   ```bash
   docker run --rm --gpus all --cpus="4.0" -v $(pwd)/gameplay:/app/gameplay -v $(pwd)/generated:/app/generated --env-file .env shorts-maker
   ```
-- **"Torch not installed" / "CUDA not available"**: Asegúrate de estar ejecutando dentro del contenedor de Docker con `--gpus all` o de tener instalado localmente el kit de herramientas de CUDA correcto.
-- **Error de NVENC**: Si `h264_nvenc` falla, el script intenta cambiar a la codificación por software (`libx264`). Comprueba si tu GPU es compatible con NVENC y si los controladores están actualizados.
+- **"Torch not installed" / "CUDA not available"**: Asegúrese de estar ejecutando el contenedor Docker con `--gpus all` o de tener instalado localmente el toolkit de CUDA correcto.
+- **Error de NVENC**: Si `h264_nvenc` falla, el script intentará recurrir a la codificación por software (`libx264`). Verifique si su GPU soporta NVENC y si los controladores están actualizados.
 
 ## 📄 Licencia
 
