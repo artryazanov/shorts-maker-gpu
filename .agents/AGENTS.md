@@ -58,6 +58,9 @@ The pipeline is designed to keep video frames in VRAM (GPU memory) as much as po
 - When running tests or linters, prefer using `uv run`, or activating the virtual environment (`.venv/bin/python`). For WSL/Windows interoperability, prefix bash commands with `wsl -d Ubuntu-24.04 bash -c "..."` if triggered from Windows PowerShell.
 - Docker builds may fail with OOM / Segfaults during VPF compilation if not constrained. (Advise the user to use `--cpuset-cpus`).
 
+### 5. Git and Version Control
+- **NEVER** run `git commit` or `git push` on behalf of the user. The user prefers to review, commit, and push all changes themselves. Make your modifications to the code and inform the user when they are ready to be committed.
+
 ## 🧹 Code Style
 - Use strict type hinting (`mypy --strict`).
 - Run `ruff check .` and `ruff format .` before finalizing any changes.
