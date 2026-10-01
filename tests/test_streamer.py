@@ -211,11 +211,11 @@ def test_streamer_target_fps(tmp_path):
     mock_surf.Height.return_value = 720
     mock_surf.Width.return_value = 1280
     
-    with patch.object(nvc.PyFFmpegDemuxer, 'DemuxSinglePacket', side_effect=side_effects):
+    with patch.object(nvc.PyFFmpegDemuxer, 'DemuxSinglePacket', side_effect=side_effects):  # noqa: SIM117
         with patch.object(nvc.PyFFmpegDemuxer, 'LastPacketData', side_effect=Exception("mock fail to fallback to fake time")):
             mock_decoder = MagicMock()
             mock_decoder.DecodeSurfaceFromPacket.return_value = mock_surf
-            with patch.object(nvc, 'PyNvDecoder', return_value=mock_decoder):
+            with patch.object(nvc, 'PyNvDecoder', return_value=mock_decoder):  # noqa: SIM117
                 with patch("PytorchNvCodec.make_tensor", return_value=torch.zeros((720, 1280, 3))):
                     with GPUVideoStreamer(video_path) as streamer:
                         # Force streamer FPS

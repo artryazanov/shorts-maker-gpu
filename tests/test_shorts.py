@@ -13,7 +13,7 @@ import numpy as np
 # Ensure the project root is on the import path.
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
-import tests.mock_gpu
+import tests.mock_gpu  # noqa: F401
 from shorts_maker.analysis.video import compute_video_action_profile
 from shorts_maker.config import ProcessingConfig
 from shorts_maker.io.render import select_background_resolution

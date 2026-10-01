@@ -4,7 +4,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
-import tests.mock_gpu
+import tests.mock_gpu  # noqa: F401
 from shorts_maker.utils.scenes import _SecondsTime, scene_action_score
 
 

@@ -4,7 +4,7 @@ from pathlib import Path
 # Ensure the project root is on the import path.
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
-import tests.mock_gpu
+import tests.mock_gpu  # noqa: F401
 from shorts_maker.config import ProcessingConfig
 from shorts_maker.io.render import RenderParams, log_memory_usage
 from shorts_maker.utils.scenes import _SecondsTime

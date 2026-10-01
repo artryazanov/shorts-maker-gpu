@@ -2,7 +2,7 @@ from unittest.mock import MagicMock, patch
 
 from typer.testing import CliRunner
 
-import tests.mock_gpu
+import tests.mock_gpu  # noqa: F401
 from shorts_maker.cli import app
 
 runner = CliRunner()

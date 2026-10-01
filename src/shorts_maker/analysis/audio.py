@@ -57,7 +57,7 @@ def compute_audio_action_profile(
         info = torchaudio.info(str(video_path))
         sample_rate = info.sample_rate
         total_samples = info.num_frames
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         logger.warning(f"Native torchaudio failed for {video_path.name}: {e}. Trying ffmpeg+wave fallback...")
         temp_dir_obj = tempfile.TemporaryDirectory()
         temp_audio_path = os.path.join(temp_dir_obj.name, "extracted.wav")
@@ -73,11 +73,11 @@ def compute_audio_action_profile(
         ]
         try:
             subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
-            wf = wave.open(temp_audio_path, 'rb')
+            wf = wave.open(temp_audio_path, 'rb')  # noqa: SIM115
             sample_rate = wf.getframerate()
             total_samples = wf.getnframes()
             use_wave_fallback = True
-        except Exception as fallback_e:
+        except Exception as fallback_e:  # noqa: BLE001
             logger.error(f"Failed to load audio from {video_path} even with fallback: {fallback_e}")
             if wf:
                 wf.close()  # pragma: no cover
@@ -120,7 +120,7 @@ def compute_audio_action_profile(
                     break  # pragma: no cover
                 audio_np = np.frombuffer(raw_bytes, dtype='<i2').astype(np.float32) / 32768.0
                 waveform = torch.from_numpy(audio_np).unsqueeze(0)
-                sr = sample_rate
+                _sr = sample_rate
             else:
                 waveform, _sr = torchaudio.load(
                     str(video_path),
