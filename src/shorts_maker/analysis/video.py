@@ -47,7 +47,7 @@ def compute_video_action_profile(
         w_new = max(1, dmx.Width() // downscale_factor)
         h_new = max(1, dmx.Height() // downscale_factor)
         del dmx
-    except Exception:
+    except Exception:  # noqa: BLE001
         logger.warning("Failed to load video for action profile.", exc_info=True)
         return np.array([]), np.array([])
 
@@ -70,7 +70,7 @@ def compute_video_action_profile(
 
         # GPUVideoStreamer natively handles iterating to the end without hanging
         # and outputs only the batches representing the requested `step`
-        for frames_subset, global_indices, batch_timestamps_list in streamer.stream_batches(
+        for frames_subset, _global_indices, batch_timestamps_list in streamer.stream_batches(
             batch_size=16, step=step
         ):
             frames_subset = frames_subset.float()

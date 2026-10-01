@@ -2,7 +2,7 @@ import sys
 from pathlib import Path
 from unittest import mock
 
-import tests.mock_gpu  # noqa: F401
+import tests.mock_gpu
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 from shorts_maker.config import ProcessingConfig

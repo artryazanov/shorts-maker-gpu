@@ -125,12 +125,12 @@ class VideoProcessor:
                 check=True,
             )
             video_duration = float(res.stdout.strip())  # pragma: no cover
-        except Exception:
+        except Exception:  # noqa: BLE001
             try:
                 dmx = nvc.PyFFmpegDemuxer(str(video_file))
                 video_duration = float(dmx.Numframes() / dmx.Framerate())
                 del dmx
-            except Exception:  # pragma: no cover
+            except Exception:  # noqa: BLE001  # pragma: no cover
                 logger.warning("PyNvCodec probe failed, fallback to 0 duration.")  # pragma: no cover
                 video_duration = 0.0  # pragma: no cover
 

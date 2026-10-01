@@ -120,7 +120,7 @@ class GPUVideoStreamer:
                 try:
                     pkt_data = nvc.PacketData()
                     timebase = self.nv_dmx.Timebase()
-                except Exception:  # pragma: no cover
+                except Exception:  # noqa: BLE001  # pragma: no cover
                     pkt_data = None  # pragma: no cover
                     timebase = 1.0  # pragma: no cover
                 

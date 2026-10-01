@@ -265,7 +265,7 @@ def render_video_gpu(
         src_fps = float(dmx.Framerate())
         fps = min(src_fps, 60.0)
         del dmx
-    except Exception:  # pragma: no cover
+    except Exception:  # noqa: BLE001  # pragma: no cover
         fps = 30.0  # pragma: no cover
         
     # We open the streamer EARLY so we can extract the exact frame start time
@@ -359,7 +359,7 @@ def render_video_gpu(
     stderr_dest: Any = subprocess.DEVNULL
     if save_ffmpeg_logs:
         log_path = output_path.with_suffix(".ffmpeg.log")
-        ffmpeg_log = open(log_path, "w")
+        ffmpeg_log = open(log_path, "w")  # noqa: SIM115
         stderr_dest = ffmpeg_log
     
     process = None
@@ -421,7 +421,7 @@ def render_video_gpu(
                 ):
                     if batch_count % 50 == 0:
                         logger.info(f"Rendering batch {batch_count}/{total_batches}")
-                    batch_count += 1
+                    batch_count += 1  # noqa: SIM113
 
                     if process.poll() is not None:
                         logger.error("FFMPEG died")  # pragma: no cover
@@ -526,7 +526,7 @@ def render_video_gpu(
                 try:
                     if process.stdin:
                         process.stdin.close()
-                except Exception:  # pragma: no cover
+                except Exception:  # noqa: BLE001  # pragma: no cover
                     pass  # pragma: no cover
                 process.wait()
 
@@ -557,5 +557,5 @@ def render_video_gpu_isolated(*args: Any, **kwargs: Any) -> None:
 
     if p.exitcode != 0:
         logger.error("Render process failed with exit code %s", p.exitcode)
-        if p.exitcode == -9 or p.exitcode == 137:
+        if p.exitcode in (-9, 137):
             logger.error("Render process was likely OOM killed.")

@@ -73,7 +73,7 @@ class FakeTensor:
             if len(new_shape) != len(dims):
                 new_shape = tuple([1] * len(dims))
             return FakeTensor(shape=new_shape, numel=self._numel)
-        except Exception:
+        except Exception:  # noqa: BLE001
             return FakeTensor(shape=tuple([1] * len(dims)), numel=self._numel)
         
     def contiguous(self): return self
@@ -98,7 +98,7 @@ class FakeTensor:
         return FakeTensor(shape=(max(1, n_frames), size), numel=max(1, n_frames) * size)
         
     def __getitem__(self, idx):
-        if isinstance(idx, int):
+        if isinstance(idx, int):  # noqa: SIM102
             if idx >= self._shape[0] or idx < -self._shape[0]:
                 raise IndexError("Index out of bounds")
         return FakeTensor(shape=self._shape, numel=self._numel)

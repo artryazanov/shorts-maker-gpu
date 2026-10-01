@@ -35,10 +35,10 @@ def _process_video_worker(config: ProcessingConfig, video_file: Path, output_dir
 
 @app.command()
 def process(
-    input_dir: Path = typer.Option(
+    input_dir: Path = typer.Option(  # noqa: B008
         Path("gameplay"), help="Directory with source videos"
     ),
-    output_dir: Path = typer.Option(Path("generated"), help="Output directory"),
+    output_dir: Path = typer.Option(Path("generated"), help="Output directory"),  # noqa: B008
     scene_limit: int = typer.Option(None, help="Override scene limit from config"),
 ) -> None:
     """Processes long gameplay videos to generate hardware-accelerated viral shorts.

@@ -35,7 +35,7 @@ def test_streamer_init_failure(tmp_path):
     video_path = tmp_path / "test.mp4"
     video_path.touch()
     
-    with patch.object(nvc, 'PyNvDecoder', side_effect=Exception("Decode error")):
+    with patch.object(nvc, "PyNvDecoder", side_effect=Exception("Decode error")):  # noqa: SIM117
         with pytest.raises(Exception, match="Decode error"):
             GPUVideoStreamer(video_path)
 
@@ -50,10 +50,10 @@ def test_streamer_stream_batches(tmp_path):
     mock_surf.Height.return_value = 720
     mock_surf.Width.return_value = 1280
     
-    with patch.object(nvc.PyFFmpegDemuxer, 'DemuxSinglePacket', side_effect=side_effects):
+    with patch.object(nvc.PyFFmpegDemuxer, "DemuxSinglePacket", side_effect=side_effects):
         mock_decoder = MagicMock()
         mock_decoder.DecodeSurfaceFromPacket.return_value = mock_surf
-        with patch.object(nvc, 'PyNvDecoder', return_value=mock_decoder):
+        with patch.object(nvc, "PyNvDecoder", return_value=mock_decoder):  # noqa: SIM117
             with GPUVideoStreamer(video_path) as streamer:
                 batches = list(streamer.stream_batches(batch_size=4, step=1))
                 
@@ -70,10 +70,10 @@ def test_streamer_stream_batches_step(tmp_path):
     mock_surf = MagicMock()
     mock_surf.Empty.return_value = False
     
-    with patch.object(nvc.PyFFmpegDemuxer, 'DemuxSinglePacket', side_effect=side_effects):
+    with patch.object(nvc.PyFFmpegDemuxer, "DemuxSinglePacket", side_effect=side_effects):
         mock_decoder = MagicMock()
         mock_decoder.DecodeSurfaceFromPacket.return_value = mock_surf
-        with patch.object(nvc, 'PyNvDecoder', return_value=mock_decoder):
+        with patch.object(nvc, "PyNvDecoder", return_value=mock_decoder):  # noqa: SIM117
             with GPUVideoStreamer(video_path) as streamer:
                 batches = list(streamer.stream_batches(batch_size=4, step=2))
                 assert len(batches) == 2
@@ -87,10 +87,10 @@ def test_streamer_max_frames(tmp_path):
     mock_surf = MagicMock()
     mock_surf.Empty.return_value = False
     
-    with patch.object(nvc.PyFFmpegDemuxer, 'DemuxSinglePacket', side_effect=side_effects):
+    with patch.object(nvc.PyFFmpegDemuxer, "DemuxSinglePacket", side_effect=side_effects):
         mock_decoder = MagicMock()
         mock_decoder.DecodeSurfaceFromPacket.return_value = mock_surf
-        with patch.object(nvc, 'PyNvDecoder', return_value=mock_decoder):
+        with patch.object(nvc, "PyNvDecoder", return_value=mock_decoder):  # noqa: SIM117
             with GPUVideoStreamer(video_path) as streamer:
                 batches = list(streamer.stream_batches(batch_size=4, max_frames=5))
                 assert len(batches) == 2
@@ -102,7 +102,7 @@ def test_streamer_nv12_format(tmp_path):
     video_path = tmp_path / "test.mp4"
     video_path.touch()
     
-    with patch("PyNvCodec.PyFFmpegDemuxer.Format", return_value=nvc.PixelFormat.NV12):
+    with patch("PyNvCodec.PyFFmpegDemuxer.Format", return_value=nvc.PixelFormat.NV12):  # noqa: SIM117
         with GPUVideoStreamer(video_path, target_width=1280, target_height=720) as streamer:
             streamer.nv_dmx.DemuxSinglePacket = MagicMock(side_effect=[True, False])
             mock_surf = MagicMock()
@@ -161,7 +161,7 @@ def test_streamer_fallback_make_tensor(tmp_path):
             assert len(batches) == 1
     finally:
         if original_make:
-            setattr(pnvc, "make_tensor", original_make)
+            pnvc.make_tensor = original_make
 
 def test_streamer_edge_make_tensor_shapes(tmp_path):
     video_path = tmp_path / "test.mp4"
@@ -211,11 +211,11 @@ def test_streamer_target_fps(tmp_path):
     mock_surf.Height.return_value = 720
     mock_surf.Width.return_value = 1280
     
-    with patch.object(nvc.PyFFmpegDemuxer, 'DemuxSinglePacket', side_effect=side_effects):  # noqa: SIM117
+    with patch.object(nvc.PyFFmpegDemuxer, "DemuxSinglePacket", side_effect=side_effects):  # noqa: SIM117  # noqa: SIM117
         with patch.object(nvc.PyFFmpegDemuxer, 'LastPacketData', side_effect=Exception("mock fail to fallback to fake time")):
             mock_decoder = MagicMock()
             mock_decoder.DecodeSurfaceFromPacket.return_value = mock_surf
-            with patch.object(nvc, 'PyNvDecoder', return_value=mock_decoder):  # noqa: SIM117
+            with patch.object(nvc, "PyNvDecoder", return_value=mock_decoder):  # noqa: SIM117  # noqa: SIM117
                 with patch("PytorchNvCodec.make_tensor", return_value=torch.zeros((720, 1280, 3))):
                     with GPUVideoStreamer(video_path) as streamer:
                         # Force streamer FPS

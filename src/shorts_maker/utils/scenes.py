@@ -73,10 +73,7 @@ def detect_video_scenes_gpu(
 
     # SceneManager.DEFAULT_MIN_WIDTH = 256
     TARGET_MIN_WIDTH = 256
-    if w0 < TARGET_MIN_WIDTH:
-        downscale = 1.0
-    else:
-        downscale = w0 / float(TARGET_MIN_WIDTH)
+    downscale = 1.0 if w0 < TARGET_MIN_WIDTH else w0 / float(TARGET_MIN_WIDTH)
 
     w_eff = int(w0 / downscale)
     h_eff = int(h0 / downscale)
