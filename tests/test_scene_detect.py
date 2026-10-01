@@ -133,4 +133,39 @@ def test_detect_video_scenes_small_video(mock_dmx, mock_streamer):
     assert len(scenes) == 1
     assert scenes[0][0].get_seconds() == 0.0
     assert scenes[0][1].get_seconds() == 2 / 30.0
+    
+@mock.patch("shorts_maker.utils.scenes.GPUVideoStreamer")
+@mock.patch("shorts_maker.utils.scenes.nvc.PyFFmpegDemuxer")
+def test_detect_video_scenes_skip_first_seconds(mock_dmx, mock_streamer):
+    mock_dmx_instance = mock.MagicMock()
+    mock_dmx_instance.Width.return_value = 1920
+    mock_dmx_instance.Height.return_value = 1080
+    mock_dmx_instance.Framerate.return_value = 30.0
+    mock_dmx_instance.Numframes.return_value = 150
+    mock_dmx.return_value = mock_dmx_instance
+    
+    class FakeFramesTensor:
+        def __init__(self, size):
+            self.size = size
+        def cpu(self): return self
+        def numpy(self):
+            import numpy as np
+            return np.ones((self.size, 256, 144, 3), dtype=np.uint8) * 128
+            
+    mock_streamer_instance = mock.MagicMock()
+    batches = []
+    for i in range(0, 150, 16):
+        end = min(150, i + 16)
+        batches.append((FakeFramesTensor(end - i), list(range(i, end)), [x/30.0 for x in range(i, end)]))
+    mock_streamer_instance.stream_batches.return_value = batches
+    
+    mock_streamer_context = mock.MagicMock()
+    mock_streamer_context.__enter__.return_value = mock_streamer_instance
+    mock_streamer.return_value = mock_streamer_context
+    
+    # Test skipping the first 2.0 seconds out of 5.0 total (150 frames @ 30fps)
+    scenes = detect_video_scenes_gpu(Path("dummy.mp4"), threshold=200.0, skip_first_seconds=2.0)
+    assert len(scenes) == 1
+    assert scenes[0][0].get_seconds() == 2.0
+    assert scenes[0][1].get_seconds() == 5.0
 

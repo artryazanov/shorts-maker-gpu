@@ -120,8 +120,9 @@ def test_streamer_seek_with_pts(tmp_path):
     video_path.touch()
     
     with patch("PyNvCodec.SeekContext"):
+        pts_iter = iter([150, 300, 450])
         with patch.object(nvc.PyFFmpegDemuxer, 'LastPacketData') as mock_last:
-            mock_last.side_effect = lambda pd: setattr(pd, 'pts', 150) # 150 * 0.01 = 1.5s
+            mock_last.side_effect = lambda pd: setattr(pd, 'pts', next(pts_iter))
             
             # Setup packets: First Demux fails to break loop, wait we want to break at 1.5 >= 1.0!
             def demux_side_effect(*args):
@@ -131,6 +132,13 @@ def test_streamer_seek_with_pts(tmp_path):
                 # Target seek 1.0. Time is 1.5, loop breaks immediately
                 streamer = GPUVideoStreamer(video_path, seek_time=1.0)
                 assert streamer.start_frame == 30 # 30fps
+                assert getattr(streamer, 'first_packet_valid', False)
+                
+                # Now test stream_batches to cover `is_first_iteration` branch
+                streamer.nv_dmx.DemuxSinglePacket.side_effect = [True, False]
+                streamer.nv_dec.DecodeSurfaceFromPacket.return_value.Empty.return_value = False
+                batches = list(streamer.stream_batches(batch_size=1))
+                assert len(batches) >= 1
 
 def test_streamer_fallback_make_tensor(tmp_path):
     video_path = tmp_path / "test.mp4"

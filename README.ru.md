@@ -138,6 +138,7 @@ docker run --rm \
 - `MIN_SHORT_LENGTH=15` — Минимальная длина short-видео в секундах.
 - `MAX_SHORT_LENGTH=179` — Максимальная длина short-видео в секундах.
 - `MAX_COMBINED_SCENE_LENGTH=300` — Максимальная комбинированная длина (в секундах).
+- `SKIP_FIRST_SECONDS=0.0` — Сколько секунд пропустить с начала видео (полезно для пропуска заставок).
 - `SAVE_FFMPEG_LOGS=False` — Сохранять ли логи FFmpeg во время рендеринга.
 - `LOG_LEVEL=WARNING` — Уровень логирования (например, INFO, DEBUG, WARNING).
 

@@ -108,6 +108,35 @@ def test_render_video_gpu(mock_run, mock_popen, mock_dmx, mock_streamer, tmp_pat
     out_path = tmp_path / "out.mp4"
     render_video_gpu(params, out_path)
     
+@mock.patch("shorts_maker.io.render.GPUVideoStreamer")
+@mock.patch("shorts_maker.io.render.nvc.PyFFmpegDemuxer")
+@mock.patch("shorts_maker.io.render.subprocess.Popen")
+@mock.patch("shorts_maker.io.render.subprocess.run")
+def test_render_video_gpu_invalid_first_packet(mock_run, mock_popen, mock_dmx, mock_streamer, tmp_path):
+    config = ProcessingConfig()
+    
+    mock_dmx_instance = mock.MagicMock()
+    mock_dmx_instance.Width.return_value = 1920
+    mock_dmx_instance.Height.return_value = 1080
+    mock_dmx_instance.Framerate.return_value = 30.0
+    mock_dmx.return_value = mock_dmx_instance
+    
+    mock_streamer_instance = mock.MagicMock()
+    mock_streamer_instance.first_packet_valid = False
+    mock_streamer_context = mock.MagicMock()
+    mock_streamer_context.first_packet_valid = False
+    mock_streamer_context.stream_batches.return_value = []
+    mock_streamer_context.__enter__.return_value = mock_streamer_instance
+    mock_streamer.return_value = mock_streamer_context
+
+    params = get_render_params(Path("dummy.mp4"), 2.0, 1.0, config)
+    
+    mock_process = mock.MagicMock()
+    mock_process.poll.return_value = None
+    mock_popen.return_value = mock_process
+    
+    out_path = tmp_path / "out2.mp4"
+    render_video_gpu(params, out_path)
     # Verify run was called for extracting audio
     mock_run.assert_called_once()
     # Verify Popen was called for ffmpeg encoding

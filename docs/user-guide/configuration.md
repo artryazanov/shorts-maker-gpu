@@ -14,6 +14,7 @@ And adjust values as needed.
 |---|---|---|
 | `TARGET_RATIO_W` | `9`   | Width part of the target aspect ratio (for 9:16). |
 | `TARGET_RATIO_H` | `16`  | Height part of the target aspect ratio (for 9:16). |
+| `SKIP_FIRST_SECONDS`| `0`  | Skips the specified number of seconds at the beginning of each video (useful for skipping intros). |
 | `SCENE_LIMIT`    | `4`   | Maximum number of top scenes rendered per source video. |
 | `SCENE_THRESHOLD`| `45.0`| Threshold for scene detection cuts. |
 | `X_CENTER`       | `0.5` | Horizontal crop center in range `[0.0, 1.0]`. |

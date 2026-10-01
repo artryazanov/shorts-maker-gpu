@@ -192,6 +192,9 @@ def setup_mocks():
 
     def make_surf_mock(*args, **kwargs):
         m = mock.MagicMock()
+        m.Empty.return_value = False
+        m.DecodeSurfaceFromPacket.return_value = mock.MagicMock()
+        m.DecodeSurfaceFromPacket.return_value.Empty.return_value = False
         m.Execute.return_value = mock.MagicMock()
         m.Execute.return_value.Empty.return_value = False
         return m

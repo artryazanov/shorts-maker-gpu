@@ -143,7 +143,7 @@ class GPUVideoStreamer:
                                 self.dec_surface = surf  # pragma: no cover
                     except TypeError:  # pragma: no cover
                         success = self.nv_dec.DecodeSurfaceFromPacket(packet, self.dec_surface)  # pragma: no cover
-                        
+
                     if success and current_time >= seek_time:
                         self.first_packet_time = current_time
                         self.first_packet_valid = True
@@ -201,16 +201,18 @@ class GPUVideoStreamer:
         frame_idx = self.start_frame
         frames_yielded = 0
         
-        try:
-            timebase = self.nv_dmx.Timebase()
-        except Exception:
-            timebase = 1.0
-    
         # Time-based frame dropping logic
         next_target_time = None
         target_frame_interval = 1.0 / target_fps if target_fps else 0.0
         
         is_first_iteration = getattr(self, "first_packet_valid", False)
+        
+        try:
+            pkt_data = nvc.PacketData()
+            timebase = self.nv_dmx.Timebase()
+        except Exception:  # pragma: no cover
+            pkt_data = None  # pragma: no cover
+            timebase = 1.0  # pragma: no cover
     
         while True:
             if is_first_iteration:
@@ -221,13 +223,6 @@ class GPUVideoStreamer:
                 packet = np.ndarray(shape=(0,), dtype=np.uint8)
                 if not self.nv_dmx.DemuxSinglePacket(packet):
                     break
-                    
-                try:
-                    pkt_data = nvc.PacketData()
-                    self.nv_dmx.LastPacketData(pkt_data)
-                    packet_time = pkt_data.pts * timebase
-                except Exception:
-                    packet_time = frame_idx / self.fps
                     
                 try:
                     surf = self.nv_dec.DecodeSurfaceFromPacket(packet)
@@ -241,6 +236,8 @@ class GPUVideoStreamer:
                     success = self.nv_dec.DecodeSurfaceFromPacket(packet, self.dec_surface)  # pragma: no cover
                 if not success:
                     continue  # pragma: no cover
+                
+                packet_time = getattr(self, 'first_packet_time', 0.0) + (frame_idx - self.start_frame) / self.fps
     
             if next_target_time is None:
                 next_target_time = getattr(self, 'first_packet_time', packet_time)
