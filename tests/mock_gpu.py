@@ -7,7 +7,7 @@ def create_mock_module(name):
     m = types.ModuleType(name)
     m.__path__ = []
     # Provide simple safe defaults for common attributes to avoid pytest introspection loops
-    m.__file__ = f"/tmp/{name}_mock.py"  # noqa: S108
+    m.__file__ = f"/tmp/{name}_mock.py"
     return m
 
 class FakeTensor:

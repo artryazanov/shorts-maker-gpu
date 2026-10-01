@@ -518,8 +518,8 @@ def render_video_gpu(
 
                     pbar_render.update(1)
 
-        except Exception as e:  # pragma: no cover
-            logger.exception(f"Error during GPU render: {e}")  # pragma: no cover
+        except Exception:  # pragma: no cover
+            logger.exception("Error during GPU render")  # pragma: no cover
         finally:
             # Clean up processes and memory
             if process:
