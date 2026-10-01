@@ -519,7 +519,7 @@ def render_video_gpu(
                     pbar_render.update(1)
 
         except Exception as e:  # pragma: no cover
-            logger.error(f"Error during GPU render: {e}", exc_info=True)  # pragma: no cover
+            logger.exception(f"Error during GPU render: {e}")  # pragma: no cover
         finally:
             # Clean up processes and memory
             if process:
@@ -527,7 +527,7 @@ def render_video_gpu(
                     if process.stdin:
                         process.stdin.close()
                 except Exception:  # noqa: BLE001  # pragma: no cover
-                    pass  # pragma: no cover
+                    logger.debug("Failed to close stdin gracefully.")  # pragma: no cover
                 process.wait()
 
             if "ffmpeg_log" in locals() and ffmpeg_log:

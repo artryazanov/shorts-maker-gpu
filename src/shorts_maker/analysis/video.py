@@ -47,7 +47,7 @@ def compute_video_action_profile(
         w_new = max(1, dmx.Width() // downscale_factor)
         h_new = max(1, dmx.Height() // downscale_factor)
         del dmx
-    except Exception:  # noqa: BLE001
+    except Exception:
         logger.warning("Failed to load video for action profile.", exc_info=True)
         return np.array([]), np.array([])
 

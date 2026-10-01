@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Any
+from typing import Self
 
 import cv2
 import numpy as np
@@ -154,11 +154,11 @@ class GPUVideoStreamer:
             del self.nv_dmx
             raise
 
-    def __enter__(self) -> GPUVideoStreamer:
+    def __enter__(self) -> Self:
         """Enters the context manager for GPUVideoStreamer."""
         return self
 
-    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+    def __exit__(self, exc_type: object, exc_val: object, exc_tb: object) -> None:
         """Exits the context manager and explicitly frees all VPF and CUDA resources."""
         del self.dec_surface
         del self.nv_cvt
