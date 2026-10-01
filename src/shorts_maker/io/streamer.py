@@ -207,13 +207,7 @@ class GPUVideoStreamer:
         
         is_first_iteration = getattr(self, "first_packet_valid", False)
         
-        try:
-            pkt_data = nvc.PacketData()
-            timebase = self.nv_dmx.Timebase()
-        except Exception:  # pragma: no cover
-            pkt_data = None  # pragma: no cover
-            timebase = 1.0  # pragma: no cover
-    
+
         while True:
             if is_first_iteration:
                 packet_time = self.first_packet_time
