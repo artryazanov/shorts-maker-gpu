@@ -4,7 +4,7 @@ from unittest import mock
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
-import tests.mock_gpu  # noqa: F401
+import tests.mock_gpu
 from shorts_maker.analysis.video import compute_video_action_profile
 
 

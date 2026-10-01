@@ -489,7 +489,7 @@ def split_overlong_scenes(
         duration = end_s - start_s
 
         if duration > threshold:
-            n = int(math.ceil(duration / (1.5 * config.max_short_length)))
+            n = math.ceil(duration / (1.5 * config.max_short_length))
             if n <= 1:  # pragma: no cover
                 result.append(scene)  # pragma: no cover
                 continue  # pragma: no cover

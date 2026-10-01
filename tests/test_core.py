@@ -6,7 +6,7 @@ import numpy as np
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
-import tests.mock_gpu  # noqa: F401
+import tests.mock_gpu
 from shorts_maker.config import ProcessingConfig
 from shorts_maker.core.processor import VideoProcessor
 from shorts_maker.utils.scenes import (

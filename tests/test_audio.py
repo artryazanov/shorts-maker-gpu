@@ -23,7 +23,7 @@ class FakeTensor:
         return FakeTensor(shape=self._shape[1:] if len(self._shape)>1 else self._shape, numel=self._numel)
 
     def unsqueeze(self, *args, **kwargs):
-        return FakeTensor(shape=(1,) + self._shape, numel=self._numel)
+        return FakeTensor(shape=(1, *self._shape), numel=self._numel)
 
     def mean(self, *args, **kwargs):
         return FakeTensor(shape=self._shape, numel=self._numel)
@@ -76,9 +76,9 @@ class FakeTensor:
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
-import shorts_maker as shorts  # noqa: E402
-import tests.mock_gpu  # noqa: F401, E402
-from shorts_maker.analysis.audio import compute_audio_action_profile  # noqa: E402
+import shorts_maker as shorts
+import tests.mock_gpu
+from shorts_maker.analysis.audio import compute_audio_action_profile
 
 
 def test_compute_audio_action_profile_load_failure():
@@ -137,7 +137,7 @@ def test_audio_fallback_success(mock_wave_open, mock_sub_run):
     shorts.analysis.audio.torch.mean.return_value = FakeTensor(shape=(1, 44100), numel=44100)
     shorts.analysis.audio.torch.sqrt.return_value = FakeTensor(shape=(10,), numel=10)
     
-    t, s = compute_audio_action_profile(Path("dummy.mp4"), frame_length=2048, hop_length=512)
+    t, _s = compute_audio_action_profile(Path("dummy.mp4"), frame_length=2048, hop_length=512)
     mock_sub_run.assert_called_once()
     mock_wf.close.assert_called()
     assert len(t) > 0

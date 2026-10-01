@@ -106,7 +106,7 @@ def blur_gpu(image_tensor: torch.Tensor, sigma: float = 8.0) -> torch.Tensor:
     channels = x.shape[1]
 
     # Kernel radius (typically 3 * sigma)
-    radius = int(math.ceil(3 * sigma))
+    radius = math.ceil(3 * sigma)
     kernel_size = 2 * radius + 1
 
     # Create 1D Gaussian kernel

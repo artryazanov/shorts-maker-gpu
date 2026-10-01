@@ -36,7 +36,7 @@ class FakeTensor:
         return FakeTensor(shape=self._shape[1:] if len(self._shape)>1 else self._shape, numel=self._numel)
 
     def unsqueeze(self, *args, **kwargs):
-        return FakeTensor(shape=(1,) + self._shape, numel=self._numel)
+        return FakeTensor(shape=(1, *self._shape), numel=self._numel)
 
     def mean(self, *args, **kwargs):
         return FakeTensor(shape=self._shape, numel=self._numel)
@@ -126,7 +126,7 @@ def setup_mocks():
     torch_mock.zeros = lambda x, **kwargs: FakeTensor(shape=x if isinstance(x, tuple) else (x,))
     torch_mock.cat = lambda x, **kwargs: FakeTensor(shape=x[0].shape if hasattr(x[0], 'shape') else (100,)) if isinstance(x, (list, tuple)) and len(x) > 0 else FakeTensor()
     torch_mock.ones = lambda x, **kwargs: FakeTensor(shape=(x,) if isinstance(x, int) else x)
-    torch_mock.stack = lambda x, **kwargs: FakeTensor(shape=(len(x),) + x[0].shape if len(x)>0 and hasattr(x[0], 'shape') else (100,))
+    torch_mock.stack = lambda x, **kwargs: FakeTensor(shape=(len(x), *x[0].shape) if len(x)>0 and hasattr(x[0], 'shape') else (100,))
     torch_mock.arange = lambda *args, **kwargs: FakeTensor(shape=(args[0],) if len(args)==1 else (args[1]-args[0],))
     torch_mock.hann_window = lambda x, **kwargs: FakeTensor(shape=(x,) if isinstance(x, int) else x)
     torch_mock.stft = lambda x, **kwargs: FakeTensor(shape=(1025, 100))

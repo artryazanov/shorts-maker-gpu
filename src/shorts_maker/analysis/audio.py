@@ -122,7 +122,7 @@ def compute_audio_action_profile(
                 waveform = torch.from_numpy(audio_np).unsqueeze(0)
                 sr = sample_rate
             else:
-                waveform, sr = torchaudio.load(
+                waveform, _sr = torchaudio.load(
                     str(video_path),
                     frame_offset=read_start,
                     num_frames=read_count,

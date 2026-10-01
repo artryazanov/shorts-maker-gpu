@@ -79,7 +79,7 @@ def test_compute_video_action_profile_sequential():
 
     from unittest import mock
     with mock.patch("shorts_maker.analysis.video.GPUVideoStreamer", return_value=mock_streamer_instance):
-        times, scores = compute_video_action_profile(Path("dummy.mp4"), fps=6)
+        times, _scores = compute_video_action_profile(Path("dummy.mp4"), fps=6)
 
         assert mock_streamer_instance.stream_batches.called
         assert isinstance(times, np.ndarray) or (times == [])

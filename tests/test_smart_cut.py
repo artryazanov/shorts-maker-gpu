@@ -13,7 +13,7 @@ import numpy as np
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 # Import shorts AFTER mocking
-import tests.mock_gpu  # noqa: F401
+import tests.mock_gpu
 from shorts_maker.utils.scenes import find_smart_end_point
 
 
